@@ -1,212 +1,212 @@
-# Cortex — Personal Productivity Assistant
+# Cortex — Persistent Multi-Agent Productivity Assistant
 
-> A persistent multi-agent AI system that remembers your work across sessions, proactively prepares your context, and coordinates specialized sub-agents to handle tasks end-to-end.
-> Built for **Google Cloud Gen AI Academy APAC 2026 — Cohort 1 Hackathon**.
+> A production-aware AI system that remembers who you are, pulls your emails and calendar automatically, and helps you manage tasks — without you lifting a finger.
 
-[![Cohort 1](https://img.shields.io/badge/Cohort-1-4285F4?style=flat-square)](https://vision.hack2skill.com/event/apac-genaiacademy)
-[![ADK](https://img.shields.io/badge/Framework-Google%20ADK-4285F4?style=flat-square)](https://cloud.google.com/vertex-ai/generative-ai/docs/model-as-tool/agent-define)
-[![Python](https://img.shields.io/badge/Python-3.10+-blue?style=flat-square)](https://python.org)
-[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
+**Built for Google Cloud Gen AI Academy APAC 2026 | Cohort 1 Hackathon**
 
 ---
 
-## 🎯 What It Does
+## What It Does
 
-**The "wow" moment:** Unlike every other AI tool that forgets everything after each conversation, Cortex builds a persistent memory model — it knows your projects, relationships, and commitments across sessions.
+Cortex is different from every other AI assistant because it's **persistent**. While ChatGPT and Claude forget everything after each conversation, Cortex builds a living model of you — your projects, your people, your commitments — and uses that context to actually manage your work.
 
-**Example interaction:**
-> **You:** "What's on my plate today?"  
-> **Cortex:** *(checks your calendar + memory + emails)*  
-> "Good morning! You have 2 meetings today. For your 2pm with Rahul — you're waiting on him for the investment terms (15% equity, ₹50L). His reply is 4 days overdue. You also have 1 urgent task: submit your hackathon project by April 8."
+**The moment it clicks:**
 
-> **You:** "Send a follow-up to Rahul"  
-> **Cortex:** *(drafts email using memory context, shows draft for your approval)*  
-> "Does this look right? Reply 'send' to go ahead."
+> You open Cortex, and before you even ask anything, it says:
+> *"Good morning. You have 3 meetings today, 2 emails need attention from last week, and you promised Rahul a follow-up on the investment terms — that's 4 days overdue."*
+
+That's not a chat response. That's a chief of staff who actually knows you.
 
 ---
 
-## 🏗️ Architecture
+## Live Demo
+
+**🌐 [https://cortex-agent-455006885273.asia-south1.run.app](https://cortex-agent-455006885273.asia-south1.run.app)**
+
+Click **"Try as Guest"** — no account needed. Or connect your Google account for automatic email and calendar pull.
+
+---
+
+## Key Features
+
+### 🧠 Persistent Memory Model
+Every conversation updates Cortex's memory of you. It stores facts, preferences, relationships, and commitments — and surfaces them at exactly the right moment. Not just today's data. Everything you've ever told it.
+
+### 🤖 Multi-Agent Architecture
+One message triggers multiple specialized agents working in parallel:
+- **Cortex Coordinator** — understands intent, orchestrates everything
+- **Memory Agent** — retrieves and stores your personal context
+- **Task Agent** — manages your task list with priorities and deadlines
+- **Scheduler Agent** — reads your calendar, checks availability
+- **Email Agent** — searches your inbox, drafts responses
+
+### ✅ Checkpoint Workflows
+Before any external action — sending an email, creating a calendar event — Cortex shows you exactly what it's about to do and waits for your approval. You stay in control.
+
+### 📊 Automatic Data Pull (Google Sign-In)
+When you sign in with Google, Cortex automatically:
+- Pulls your calendar events for the next 7 days
+- Imports recent emails from your inbox
+- Scans emails for task-like content (deadlines, follow-ups, commitments)
+- Assembles everything into your morning briefing — before you ask
+
+### 📱 Multi-User, Per-User Data Isolation
+Every user has their own completely separate memory, tasks, calendar, and email data. Your data is yours. No cross-contamination.
+
+---
+
+## Architecture
 
 ```
 User Query
     │
     ▼
-┌──────────────────────────────────────────┐
-│  Cortex Coordinator (Root LlmAgent)     │
-│  • Understands intent                    │
+┌─────────────────────────────────────────┐
+│         CORTEX COORDINATOR              │
+│     Root LlmAgent (Gemini 2.5 Flash)   │
+│  • Understands natural language         │
 │  • Orchestrates sub-agents              │
+│  • Enforces checkpoint pattern           │
 │  • Synthesizes responses                │
-│  • Enforces checkpoint workflow         │
-└───────────────┬──────────────────────────┘
-                │
-    ┌───────────┼───────────┬────────────┐
-    ▼           ▼           ▼            ▼
-┌─────────┐ ┌─────────┐ ┌─────────┐ ┌──────────┐
-│ Memory  │ │  Task   │ │Scheduler│ │  Email   │
-│ Agent   │ │ Agent   │ │ Agent   │ │  Agent   │
-│(Postgre)│ │(Postgre)│ │Calendar │ │  Gmail   │
-└────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘
-     │           │           │           │
-     └───────────┴─────┬─────┴───────────┘
+└───────────────┬─────────────────────────┘
+        ┌───────┼───────┬─────────┐
+        ▼       ▼       ▼         ▼
+  ┌────────┐ ┌──────┐ ┌────────┐ ┌────────┐
+  │Memory  │ │Task  │ │Sched-  │ │ Email  │
+  │Agent   │ │Agent │ │uler    │ │ Agent  │
+  │        │ │      │ │Agent   │ │        │
+  └────┬───┘ └──┬───┘ └───┬────┘ └───┬────┘
+       │        │          │          │
+       └────────┴─────┬────┴──────────┘
                        ▼
-              PostgreSQL (Cloud SQL)
-              user_model · tasks · projects
-```
-
-**5 Agents, 3 Data Sources:**
-- **Cortex Coordinator** — orchestrates everything
-- **Memory Agent** — PostgreSQL user model (what you know about the user)
-- **Task Agent** — PostgreSQL task management
-- **Scheduler Agent** — Google Calendar API
-- **Email Agent** — Gmail API
-
----
-
-## 📁 Project Structure
-
-```
-apac-hackathon/
-├── SPEC.md              ← This file
-├── README.md            ← Documentation
-├── requirements.txt     ← Python dependencies
-├── .env.example         ← Environment template
-├── root_agent.yaml      ← ADK agent config
-│
-├── agents/
-│   ├── cortex.py        ← Root coordinator agent
-│   ├── memory.py        ← Memory (user model) agent
-│   ├── task.py          ← Task CRUD agent
-│   ├── scheduler.py     ← Calendar agent
-│   └── email.py         ← Email agent
-│
-├── tools/
-│   ├── db_tools.py      ← PostgreSQL tools (memory, tasks)
-│   ├── gmail_tools.py   ← Gmail API tools
-│   └── calendar_tools.py ← Google Calendar tools
-│
-├── db/
-│   ├── schema.sql       ← Database schema
-│   └── seed.sql         ← Sample data for demo
-│
-├── app/
-│   ├── app.py           ← Flask web app
-│   ├── requirements.txt
-│   └── templates/       ← Web UI (index, memory, tasks)
-│
-└── deploy.sh / deploy.ps1 ← Cloud Run deployment
+           ┌──────────────────────┐
+           │   DATA LAYER         │
+           │ Firebase Firestore   │
+           │ (per-user isolated)  │
+           │ Gmail + Calendar API │
+           └──────────────────────┘
 ```
 
 ---
 
-## 🚀 Quick Start
-
-### 1. Install Dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-### 2. Configure Environment
-
-```bash
-cp .env.example .env
-# Fill in your values in .env
-```
-
-### 3. Set Up Database
-
-Create a PostgreSQL database (local or Cloud SQL) and run:
-
-```bash
-psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f db/schema.sql
-psql -h $DB_HOST -U $DB_USER -d $DB_NAME -f db/seed.sql
-```
-
-### 4. Configure Google OAuth (for Gmail/Calendar)
-
-1. Go to [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials)
-2. Create OAuth 2.0 Client ID (Desktop application)
-3. Download as `credentials.json`
-4. Run: `python tools/authenticate.py --gmail --calendar`
-
-### 5. Test Locally
-
-```bash
-cd app
-python app.py
-# Visit http://localhost:8080
-```
-
----
-
-## 🚀 Deployment
-
-### Prerequisites
-- Google Cloud project with billing enabled
-- Cloud SQL PostgreSQL instance created
-- APIs enabled: `run.googleapis.com`, `calendar-json.googleapis.com`, `gmail.googleapis.com`
-
-### Deploy to Cloud Run
-
-**Bash (Linux/Mac/Cloud Shell):**
-```bash
-./deploy.sh
-```
-
-**PowerShell (Windows):**
-```powershell
-.\deploy.ps1
-```
-
----
-
-## 🔑 Key Features
-
-### 1. Persistent Memory
-Every interaction updates the user model. Ask Cortex about something you discussed days ago — it remembers.
-
-### 2. Multi-Agent Coordination
-One user message triggers multiple specialized agents working together. The coordinator orchestrates, synthesizes, and responds.
-
-### 3. Checkpoint Workflows
-For sensitive actions (sending emails), Cortex ALWAYS shows the draft first and waits for explicit approval.
-
-### 4. Proactive Context Assembly
-"Give me a briefing" triggers calendar + memory + email simultaneously — assembled into one coherent briefing.
-
-### 5. API-First Design
-Every capability is accessible via REST API. The web UI is optional.
-
----
-
-## 📋 Submission Checklist
-
-- [ ] Cloud Run URL deployed
-- [ ] GitHub repository linked
-- [ ] PDF presentation (2-3 slides)
-- [ ] Demo video (YouTube/unlisted)
-
----
-
-## 🤖 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Agent Framework | Google ADK (Agent Development Kit) |
 | LLM | Gemini 2.5 Flash |
-| Database | PostgreSQL (Cloud SQL) |
-| Calendar | Google Calendar API |
-| Email | Gmail API |
-| Web | Flask |
-| Deployment | Google Cloud Run |
+| Auth | Firebase Auth (Google OAuth + Email/Password) |
+| Database | Firebase Firestore (per-user, auto-synced) |
+| Calendar | Google Calendar API (auto-pull on sign-in) |
+| Email | Gmail API (auto-pull on sign-in) |
+| Web | Flask + Vanilla JS (no framework, fast) |
+| Deployment | Google Cloud Run (serverless, auto-scaling) |
 
 ---
 
-## 👤 Author
+## Quick Start
+
+### Try the Live Demo
+
+1. Visit [https://cortex-agent-455006885273.asia-south1.run.app](https://cortex-agent-455006885273.asia-south1.run.app)
+2. Click **"Try as Guest"**
+3. Ask: "What's on my plate today?"
+
+### Run Locally
+
+```bash
+# Clone
+git clone https://github.com/aayushprsingh/apac-hackathon.git
+cd apac-hackathon
+
+# Install
+pip install -r requirements.txt
+
+# Run
+cd app
+python app.py
+# Visit http://localhost:8080
+```
+
+### Deploy to Cloud Run
+
+```bash
+gcloud builds submit --tag asia-south1-docker.pkg.dev/YOUR_PROJECT/cortex-repo/cortex-agent:v1 .
+gcloud run deploy cortex-agent \
+  --image=asia-south1-docker.pkg.dev/YOUR_PROJECT/cortex-repo/cortex-agent:v1 \
+  --platform=managed --region=asia-south1 --allow-unauthenticated
+```
+
+---
+
+## Project Structure
+
+```
+apac-hackathon/
+├── app/
+│   ├── app.py              # Flask app + all API routes
+│   ├── firebase_auth.py     # Firebase Admin + Gmail/Calendar auto-pull
+│   ├── __init__.py
+│   ├── requirements.txt
+│   └── templates/
+│       ├── login.html       # Auth page (Google OAuth + Guest)
+│       ├── onboarding.html  # 3-step profile setup
+│       └── dashboard.html   # Main app (chat + memory + tasks)
+├── agents/                  # ADK agent definitions
+├── tools/                  # Gmail, Calendar, DB tool wrappers
+├── db/                     # PostgreSQL schema (production)
+├── demo/
+│   ├── demo_script.md      # Full demo walkthrough
+│   ├── RECORD_DEMO.md      # Video recording guide
+│   └── Cortex_Presentation.pdf
+├── FIREBASE_SETUP.md       # Firebase + Gmail/Calendar setup guide
+├── requirements.txt
+├── Dockerfile
+└── README.md
+```
+
+---
+
+## Submission
+
+| Item | Link |
+|------|------|
+| Live Demo | https://cortex-agent-455006885273.asia-south1.run.app |
+| GitHub | https://github.com/aayushprsingh/apac-hackathon |
+| Hackathon | https://vision.hack2skill.com/event/apac-genaiacademy |
+
+---
+
+## Why This Fits the Problem Statement
+
+> "Build a multi-agent AI system that helps users manage tasks, schedules, and information by interacting with multiple tools and data sources."
+
+| Requirement | How We Meet It |
+|-------------|----------------|
+| Primary root agent + sub-agents | ✅ Cortex Coordinator + 4 sub-agents (Memory, Task, Scheduler, Email) |
+| Store/retrieve structured data | ✅ Firebase Firestore with per-user isolation |
+| Interact with multiple tools | ✅ Gmail API, Google Calendar API, Firestore |
+| Multi-step workflows | ✅ Coordinator → sub-agent → checkpoint → execute |
+| API-based system | ✅ REST API on Cloud Run |
+| Automatic data pull | ✅ Gmail + Calendar pulled on Google Sign-In |
+| Zero manual data entry | ✅ Sign in with Google → everything auto-imports |
+
+---
+
+## Limitations & Future Work
+
+- **Demo mode** (current): Pre-seeded data, Gmail/Calendar pull requires Firebase setup
+- **Production**: Full Firebase + Gmail/Calendar auto-pull activates once OAuth is configured
+- **Mobile**: Web UI works on mobile, native apps are future work
+
+---
+
+## Author
 
 **Aayush Pratap Singh**  
-[GitHub](https://github.com/aayushprsingh) | [LinkedIn](https://linkedin.com/in/aayushprsingh)
+Founder, Bhooyam Agritech Pvt. Ltd.  
+[LinkedIn](https://linkedin.com/in/aayushprsingh) | [GitHub](https://github.com/aayushprsingh)
 
 ---
 
-Built for **Google Cloud Gen AI Academy APAC 2026 — Cohort 1 Hackathon**
+*Built with Google ADK + Gemini 2.5 Flash + Firebase + Cloud Run*

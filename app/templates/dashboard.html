@@ -308,14 +308,38 @@
         }
 
         async function getAuthHeaders() {
+            // 1. Use existing idToken
             if (idToken) return { 'Authorization': 'Bearer ' + idToken };
-            // Try to get from cookie-based session
+
+            // 2. Try localStorage first (set by login flow)
+            const stored = localStorage.getItem('cortex_token');
+            if (stored) {
+                idToken = stored;
+                return { 'Authorization': 'Bearer ' + stored };
+            }
+
+            // 3. Try URL param (?token=...)
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlToken = urlParams.get('token');
+            if (urlToken) {
+                localStorage.setItem('cortex_token', urlToken);
+                idToken = urlToken;
+                // Clean URL
+                window.history.replaceState({}, '', window.location.pathname);
+                return { 'Authorization': 'Bearer ' + urlToken };
+            }
+
+            // 4. Fallback to cookie (for Firebase OAuth redirects)
             const cookies = document.cookie.split(';').reduce((acc, c) => {
                 const [k, v] = c.trim().split('=');
                 acc[k] = v;
                 return acc;
             }, {});
-            if (cookies.cortex_token) return { 'Authorization': 'Bearer ' + cookies.cortex_token };
+            if (cookies.cortex_token) {
+                idToken = cookies.cortex_token;
+                return { 'Authorization': 'Bearer ' + cookies.cortex_token };
+            }
+
             return {};
         }
 
@@ -329,20 +353,25 @@
                     loadUserData();
                 });
             } else {
-                // Demo / cookie-based auth
-                const cookies = document.cookie.split(';').reduce((acc, c) => {
-                    const [k, v] = c.trim().split('=');
-                    acc[k] = v;
-                    return acc;
-                }, {});
-                if (!cookies.cortex_token) {
-                    // No session — redirect to login
+                // Demo / token-based auth
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlToken = urlParams.get('token');
+                const storedToken = localStorage.getItem('cortex_token');
+
+                if (urlToken) {
+                    localStorage.setItem('cortex_token', urlToken);
+                    idToken = urlToken;
+                    window.history.replaceState({}, '', window.location.pathname);
+                } else if (storedToken) {
+                    idToken = storedToken;
+                }
+
+                if (!idToken) {
                     window.location.href = '/login';
                     return;
                 }
-                idToken = cookies.cortex_token;
                 document.getElementById('navUser').innerHTML = 'Demo mode — your data is isolated';
-                loadDemoData();
+                loadUserData();
             }
         }
 

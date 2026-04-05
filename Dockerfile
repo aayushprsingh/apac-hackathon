@@ -22,7 +22,7 @@ COPY db/ ./db/
 # Set environment
 ENV PORT=8080
 ENV FLASK_ENV=production
-ENV DEMO_MODE=false
+ENV DEMO_MODE=true
 
 # Expose port
 EXPOSE 8080

@@ -256,17 +256,23 @@
                     document.getElementById('loggedInAs').innerHTML = 'Signed in as <strong>' + user.email + '</strong>';
                 });
             } else {
-                // Demo mode — use cookie session
-                const cookies = document.cookie.split(';').reduce((acc, c) => {
-                    const [k, v] = c.trim().split('=');
-                    acc[k] = v;
-                    return acc;
-                }, {});
-                if (!cookies.cortex_token) {
+                // Demo mode — use localStorage or URL param
+                const urlParams = new URLSearchParams(window.location.search);
+                const urlToken = urlParams.get('token');
+                const storedToken = localStorage.getItem('cortex_token');
+
+                if (urlToken) {
+                    localStorage.setItem('cortex_token', urlToken);
+                    idToken = urlToken;
+                    window.history.replaceState({}, '', window.location.pathname);
+                } else if (storedToken) {
+                    idToken = storedToken;
+                }
+
+                if (!idToken) {
                     window.location.href = '/login';
                     return;
                 }
-                idToken = cookies.cortex_token;
                 document.getElementById('userEmail').value = 'demo@example.com';
                 document.getElementById('userEmail').placeholder = 'demo@example.com';
                 document.getElementById('loggedInAs').innerHTML = 'Demo mode — <strong>your data is private</strong>';

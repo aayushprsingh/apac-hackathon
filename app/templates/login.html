@@ -180,8 +180,12 @@
                         throw new Error(err.error || 'Session creation failed');
                     }
                     sessionData = await response.json();
+                    localStorage.setItem('cortex_token', sessionData.token);
+                    window.location.href = sessionData.needs_onboarding
+                        ? '/onboarding?token=' + sessionData.token
+                        : '/dashboard?token=' + sessionData.token;
                 } else {
-                    // Demo mode — create session directly
+                    // Demo mode — create session directly without Firebase
                     const response = await fetch('/api/auth/demo', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -189,14 +193,8 @@
                     });
                     if (!response.ok) throw new Error('Demo session failed');
                     sessionData = await response.json();
-                    // Set cookie manually for demo
-                    document.cookie = `cortex_token=${sessionData.token}; path=/; max-age=${86400*30}; samesite=Lax`;
-                }
-
-                if (sessionData.needs_onboarding) {
-                    window.location.href = '/onboarding';
-                } else {
-                    window.location.href = '/dashboard';
+                    localStorage.setItem('cortex_token', sessionData.token);
+                    window.location.href = '/dashboard?token=' + sessionData.token;
                 }
             } catch (error) {
                 console.error('Sign in error:', error);
@@ -210,38 +208,36 @@
 
         // Check for existing session on load
         async function checkExistingSession() {
-            if (firebaseReady && auth) {
-                auth.onAuthStateChanged(async (user) => {
-                    if (user) {
-                        try {
-                            const response = await fetch('/api/auth/me', {
-                                headers: { 'Authorization': 'Bearer ' + await user.getIdToken() }
-                            });
-                            if (response.ok) {
-                                const data = await response.json();
-                                window.location.href = data.needs_onboarding ? '/onboarding' : '/dashboard';
-                            }
-                        } catch (e) {}
+            // Check localStorage first
+            const storedToken = localStorage.getItem('cortex_token');
+            if (storedToken) {
+                try {
+                    const response = await fetch('/api/auth/me', {
+                        headers: { 'Authorization': 'Bearer ' + storedToken }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        window.location.href = data.needs_onboarding ? '/onboarding?token=' + storedToken : '/dashboard?token=' + storedToken;
+                        return;
                     }
-                });
-            } else {
-                // Check for demo session cookie
-                const cookies = document.cookie.split(';').reduce((acc, c) => {
-                    const [k, v] = c.trim().split('=');
-                    acc[k] = v;
-                    return acc;
-                }, {});
-                if (cookies.cortex_token) {
-                    try {
-                        const response = await fetch('/api/auth/me', {
-                            headers: { 'Authorization': 'Bearer ' + cookies.cortex_token }
-                        });
-                        if (response.ok) {
-                            const data = await response.json();
-                            window.location.href = data.needs_onboarding ? '/onboarding' : '/dashboard';
-                        }
-                    } catch (e) {}
-                }
+                } catch (e) {}
+            }
+
+            // Fallback: check URL token param
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlToken = urlParams.get('token');
+            if (urlToken) {
+                try {
+                    const response = await fetch('/api/auth/me', {
+                        headers: { 'Authorization': 'Bearer ' + urlToken }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        localStorage.setItem('cortex_token', urlToken);
+                        window.location.href = data.needs_onboarding ? '/onboarding?token=' + urlToken : '/dashboard?token=' + urlToken;
+                        return;
+                    }
+                } catch (e) {}
             }
         }
         checkExistingSession();

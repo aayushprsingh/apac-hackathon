@@ -4,7 +4,7 @@ Manages Google Calendar — list events, check availability, create events
 """
 
 from google.adk.agents import LlmAgent
-from . import calendar_tools
+from tools import calendar_tools
 
 scheduler_agent = LlmAgent(
     name="scheduler_agent",

@@ -5,7 +5,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install all dependencies
+# Install all dependencies (includes ADK for real AI agent)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

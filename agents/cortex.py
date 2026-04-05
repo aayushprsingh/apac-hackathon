@@ -7,11 +7,11 @@ import json
 from datetime import datetime
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
-from .memory import memory_agent
-from .task import task_agent
-from .scheduler import scheduler_agent
-from .email import email_agent
-from . import db_tools, gmail_tools, calendar_tools
+from agents.memory import memory_agent
+from agents.task import task_agent
+from agents.scheduler import scheduler_agent
+from agents.email import email_agent
+from tools import db_tools, gmail_tools, calendar_tools
 
 
 # =============================================================================

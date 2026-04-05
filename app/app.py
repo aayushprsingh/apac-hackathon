@@ -49,20 +49,122 @@ except Exception as e:
     fb = None
 
 # =============================================================================
-# SESSION STORAGE (in-memory fallback + Firestore when available)
+# PERSISTENT STORAGE — SQLite for user accounts + sessions ( survives restarts)
+# =============================================================================
+import sqlite3
+import os
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
+os.makedirs(DATA_DIR, exist_ok=True)
+USER_DB = os.path.join(DATA_DIR, 'cortex_users.db')
+
+def _get_user_db():
+    conn = sqlite3.connect(USER_DB)
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS user_accounts (
+            email TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            uid TEXT NOT NULL,
+            name TEXT NOT NULL,
+            created_at REAL
+        )
+    ''')
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            email TEXT NOT NULL,
+            name TEXT NOT NULL,
+            created_at REAL,
+            onboarding_complete INTEGER DEFAULT 1,
+            source TEXT DEFAULT 'email'
+        )
+    ''')
+    conn.commit()
+    return conn
+
+
+def _load_user_accounts():
+    """Load user accounts from SQLite into memory."""
+    global _user_accounts
+    try:
+        conn = _get_user_db()
+        rows = conn.execute('SELECT email, password_hash, uid, name, created_at FROM user_accounts').fetchall()
+        conn.close()
+        for row in rows:
+            _user_accounts[row[0]] = {
+                'password_hash': row[1],
+                'uid': row[2],
+                'name': row[3],
+                'created_at': row[4],
+            }
+    except Exception as e:
+        print(f"[UserDB] Error loading accounts: {e}")
+
+
+def _save_user_account(email, password_hash, uid, name, created_at):
+    """Save a new user account to SQLite."""
+    try:
+        conn = _get_user_db()
+        conn.execute(
+            'INSERT OR REPLACE INTO user_accounts (email, password_hash, uid, name, created_at) VALUES (?, ?, ?, ?, ?)',
+            (email, password_hash, uid, name, created_at)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[UserDB] Error saving account: {e}")
+
+
+def _save_session(token, user_id, email, name, created_at, onboarding_complete, source):
+    """Save a session to SQLite."""
+    try:
+        conn = _get_user_db()
+        conn.execute(
+            'INSERT OR REPLACE INTO sessions (token, user_id, email, name, created_at, onboarding_complete, source) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (token, user_id, email, name, created_at, 1 if onboarding_complete else 0, source)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[UserDB] Error saving session: {e}")
+
+
+# Load existing accounts on startup
+_load_user_accounts()
+
+
+# =============================================================================
+# SESSION STORAGE (in-memory + SQLite for persistence)
 # =============================================================================
 
 _sessions = {}  # token -> {user_id, email, name, created_at, firebase_uid}
 _users_cache = {}  # user_id -> full user data (merged from memory + Firebase)
+
+# Load sessions from SQLite on startup
+try:
+    conn = _get_user_db()
+    rows = conn.execute('SELECT token, user_id, email, name, created_at, onboarding_complete, source FROM sessions').fetchall()
+    conn.close()
+    for row in rows:
+        _sessions[row[0]] = {
+            'user_id': row[1],
+            'email': row[2],
+            'name': row[3],
+            'created_at': row[4],
+            'onboarding_complete': bool(row[5]),
+            'source': row[6],
+        }
+except Exception as e:
+    print(f"[UserDB] Error loading sessions: {e}")
+
 
 # =============================================================================
 # SIMPLE EMAIL/PASSWORD AUTH
 # =============================================================================
 
 # In-memory user accounts: email -> {password_hash, uid, name}
-_user_accounts = {}
-
-DEMO_TOKEN = None
+# Loaded from SQLite at startup
 
 
 def hash_password(password, salt=None):
@@ -192,6 +294,7 @@ def get_current_user():
     if cookie_token:
         return _sessions.get(cookie_token)
 
+    # Demo token fallback (DEMO_MODE must also be set)
     if DEMO_MODE and DEMO_TOKEN:
         return _sessions.get(DEMO_TOKEN)
 
@@ -293,6 +396,9 @@ def create_session():
                 'google_data': None,
             }
 
+        # Persist session to SQLite
+        _save_session(token, uid, email, name, time.time(), True, 'email')
+
         resp = jsonify({
             'token': token,
             'user': {'email': email, 'name': name},
@@ -385,6 +491,10 @@ def register_user():
             'onboarding_complete': True,
             'source': 'email',
         }
+
+        # Persist to SQLite
+        _save_user_account(email, password_hash, uid, name, time.time())
+        _save_session(token, uid, email, name, time.time(), True, 'email')
 
         print(f"[REGISTER] Success: uid={uid}, sessions={len(_sessions)}")
 
@@ -519,9 +629,9 @@ def finish_onboarding():
 
 @app.route('/api/query', methods=['POST'])
 def api_query():
-    """Main Cortex query — uses authenticated user's real data."""
+    """Main Cortex query — tries ADK AI agent first, falls back to rules engine."""
     data = request.get_json() or {}
-    user_message = (data.get('message') or '').lower()
+    user_message = (data.get('message') or '').strip()
     session_id = data.get('session_id', 'default')
 
     user = get_current_user()
@@ -539,10 +649,38 @@ def api_query():
     cal_events = udata.get('cal_events', [])
     email_results = udata.get('email_results', [])
     tasks = udata.get('tasks', [])
-    google_data = udata.get('google_data')  # Auto-pulled from Gmail/Calendar
+    google_data = udata.get('google_data')
 
-    # Build response based on query
-    if any(k in user_message for k in ['plate', 'today', 'morning', 'briefing', 'agenda']):
+    user_message_lower = user_message.lower()
+
+    # ── Try ADK AI agent first ─────────────────────────────────────────────
+    if get_cortex_agent() is not None:
+        try:
+            loop = None
+            try:
+                import asyncio
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            ai_response = loop.run_until_complete(
+                call_ai_agent(user_message, udata, session_id)
+            )
+            if ai_response and ai_response.strip():
+                return jsonify({
+                    'response': ai_response.strip(),
+                    'session_id': session_id,
+                    'agent': 'cortex',
+                    'user_id': uid,
+                    'has_google_data': google_data is not None,
+                    'timestamp': datetime.now().isoformat()
+                })
+        except Exception as e:
+            print(f"[Query] AI agent error, falling back to rules: {e}")
+
+    # ── Rules engine fallback ───────────────────────────────────────────────
+    if any(k in user_message_lower for k in ['plate', 'today', 'morning', 'briefing', 'agenda']):
         response = build_morning_briefing(name, profile, tasks, cal_events, people, google_data)
 
     elif any(k in user_message for k in ['follow up', 'send email', 'email to', 'draft email']):
@@ -563,8 +701,14 @@ def api_query():
     elif 'email' in user_message and any(k in user_message for k in ['show', 'recent', 'inbox']):
         response = build_email_summary(email_results, google_data)
 
+    elif 'remind' in user_message or 'reminder' in user_message or ('call' in user_message and 'at' in user_message):
+        response = build_reminder_response(user_message, tasks, udata, uid)
+
+    elif any(k in user_message for k in ['hi', 'hello', 'hey', 'sup', 'yo']):
+        response = f"Hey {name}! 👋 What are you working on today?"
+
     else:
-        response = f"Hey {name}! I'm Cortex — your persistent AI assistant. Try:\n• \"What's on my plate today?\"\n• \"Show my emails\"\n• \"What do you remember about me?\"\n• \"Add a task to [description]\""
+        response = build_fallback_response(name, tasks, profile)
 
     return jsonify({
         'response': response,
@@ -574,6 +718,86 @@ def api_query():
         'has_google_data': google_data is not None,
         'timestamp': datetime.now().isoformat()
     })
+
+
+@app.route('/api/debug', methods=['GET'])
+@app.route('/api/debug/<path:subpath>', methods=['GET'])
+def debug_route(subpath=None):
+    return jsonify({
+        'DEMO_MODE': DEMO_MODE,
+        'firebase_initialized': firebase_initialized,
+        'adk_agent_available': get_cortex_agent() is not None,
+        'user_accounts_count': len(_user_accounts),
+        '_users_cache_count': len(_users_cache),
+        'sessions_count': len(_sessions),
+    })
+
+
+# =============================================================================
+# CORTEX AGENT — ADK-powered AI (lazy import, falls back to rules)
+# =============================================================================
+_cortex_agent = None
+
+def get_cortex_agent():
+    """ADK agent disabled - using rules engine fallback only."""
+    global _cortex_agent
+    # Disable ADK agent for now - using rules engine instead
+    # The rules engine handles morning briefing, tasks, memory, etc.
+    _cortex_agent = None
+    return None
+
+
+async def call_ai_agent(user_message, user_data, session_id):
+    """Call the ADK Cortex agent. Returns response string or None."""
+    agent = get_cortex_agent()
+    if not agent:
+        return None
+
+    try:
+        import os
+        from google.adk.sessions import SessionService, InMemorySessionService
+        from google.adk.runners import Runner
+        import uuid
+
+        # Use in-memory session service (no database needed for demo)
+        session_service = InMemorySessionService()
+
+        user_id = user_data.get('user_id', 'unknown')
+        session_id_val = session_id or str(uuid.uuid4())
+
+        # Create a session
+        session_service.create_session(
+            app_name='cortex',
+            user_id=user_id,
+            session_id=session_id_val,
+        )
+
+        runner = Runner(
+            app_name='cortex',
+            agent=agent,
+            session_service=session_service,
+        )
+
+        # Run the agent
+        session = session_service.create_session(
+            app_name='cortex',
+            user_id=user_id,
+            session_id=session_id_val,
+        )
+
+        response = runner.run(
+            user_id=user_id,
+            session_id=session_id_val,
+            message=user_message,
+        )
+
+        if response and response.text:
+            return response.text
+    except Exception as e:
+        import traceback
+        print(f"[Cortex Agent] Error: {e}")
+        traceback.print_exc()
+    return None
 
 
 # =============================================================================
@@ -906,6 +1130,69 @@ def build_profile_response(name, profile, people):
     if people:
         lines.append(f"\n{len(people)} people in your network.")
     return "\n".join(lines)
+
+
+def build_reminder_response(msg, tasks, udata, uid):
+    """Handle reminder/schedule requests."""
+    import re
+    import datetime
+
+    # Match "remind me to X at Y" or "call X at Y"
+    call_match = re.search(r'(?:call|remind|contact)\s+(\w+)\s+(?:at|@)\s*(\d{1,2})\s*(?:am|pm)?', msg, re.IGNORECASE)
+    if call_match:
+        person = call_match.group(1).capitalize()
+        hour = int(call_match.group(2))
+        tid = max([t.get('id', 0) for t in tasks] or [0]) + 1
+        # Default to 8am if not specified with am/pm
+        new_task = {
+            'id': tid,
+            'title': f"Call {person}",
+            'description': f'Reminder set via chat',
+            'status': 'pending',
+            'priority': 'high',
+            'source': 'chat'
+        }
+        udata.setdefault('tasks', []).append(new_task)
+        save_user_data(uid, udata)
+        return f"🔔 Reminder set: Call {person} at {hour}:00. I've added it to your high-priority tasks."
+
+    # General reminder
+    reminder_match = re.search(r'remind(?:er)?\s+(?:me\s+)?(?:to\s+)?(.+)', msg, re.IGNORECASE)
+    if reminder_match:
+        title = reminder_match.group(1).strip().capitalize()
+        tid = max([t.get('id', 0) for t in tasks] or [0]) + 1
+        new_task = {
+            'id': tid,
+            'title': f"Reminder: {title}",
+            'description': 'Added via chat',
+            'status': 'pending',
+            'priority': 'medium',
+            'source': 'chat'
+        }
+        udata.setdefault('tasks', []).append(new_task)
+        save_user_data(uid, udata)
+        return f"🔔 Reminder saved: '{title}'. Check your tasks for details."
+
+    return "I didn't catch the reminder. Try: 'remind me to call atharva at 8am'"
+
+
+def build_fallback_response(name, tasks, profile):
+    """Dynamic fallback when no rule matched — checks what's relevant."""
+    suggestions = []
+
+    pending_tasks = [t for t in tasks if t.get('status') != 'done']
+    if pending_tasks:
+        suggestions.append("check your task list")
+    if profile.get('current_project', {}).get('name'):
+        suggestions.append("discuss your project")
+    if not profile.get('name') or profile.get('name') == 'there':
+        suggestions.append("complete your profile")
+    else:
+        suggestions.append("set a reminder")
+        suggestions.append("ask about your schedule")
+
+    suggestion_text = "\n• ".join(suggestions)
+    return f"Hey {name}! I'm here to help. Try: {suggestion_text}"
 
 
 # =============================================================================

@@ -4,7 +4,7 @@ Manages the persistent user memory model in PostgreSQL
 """
 
 from google.adk.agents import LlmAgent
-from . import db_tools
+from tools import db_tools
 
 memory_agent = LlmAgent(
     name="memory_agent",

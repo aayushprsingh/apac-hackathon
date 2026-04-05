@@ -4,7 +4,7 @@ Handles task and project CRUD operations
 """
 
 from google.adk.agents import LlmAgent
-from . import db_tools
+from tools import db_tools
 
 task_agent = LlmAgent(
     name="task_agent",

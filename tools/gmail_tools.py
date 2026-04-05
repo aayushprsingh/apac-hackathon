@@ -181,7 +181,7 @@ def read_email(thread_id: str = None, message_id: str = None) -> dict:
     except RuntimeError as e:
         return {"error": str(e)}
     except Exception as e:
-        return {"error": f"Failed to read email: {str(e)}"}]
+        return {"error": f"Failed to read email: {str(e)}"}
 
 
 def get_thread(thread_id: str, max_messages: int = 10) -> dict:

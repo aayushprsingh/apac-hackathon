@@ -4,7 +4,7 @@ Manages Gmail — search, read, draft, and send emails
 """
 
 from google.adk.agents import LlmAgent
-from . import gmail_tools
+from tools import gmail_tools
 
 email_agent = LlmAgent(
     name="email_agent",

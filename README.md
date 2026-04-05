@@ -205,7 +205,6 @@ Every capability is accessible via REST API. The web UI is optional.
 ## 👤 Author
 
 **Aayush Pratap Singh**  
-Bhooyam Agritech Private Limited  
 [GitHub](https://github.com/aayushprsingh) | [LinkedIn](https://linkedin.com/in/aayushprsingh)
 
 ---

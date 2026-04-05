@@ -5,7 +5,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Install all dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -19,7 +19,7 @@ COPY agents/ ./agents/
 COPY tools/ ./tools/
 COPY db/ ./db/
 
-# Set environment
+# Environment
 ENV PORT=8080
 ENV FLASK_ENV=production
 ENV DEMO_MODE=true

@@ -206,7 +206,7 @@ Every capability is accessible via REST API. The web UI is optional.
 
 **Aayush Pratap Singh**  
 Bhooyam Agritech Private Limited  
-[GitHub](https://github.com/aayushprsingh) | [LinkedIn](https://linkedin.com/in/aayushpratapsingh)
+[GitHub](https://github.com/aayushprsingh) | [LinkedIn](https://linkedin.com/in/aayushprsingh)
 
 ---
 

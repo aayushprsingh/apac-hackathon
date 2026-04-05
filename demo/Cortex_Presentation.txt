@@ -1,0 +1,10 @@
+================================================================================
+SLIDE 1: Cortex — Personal Productivity Assistant
+         Google Cloud Gen AI Academy APAC 2026 | Cohort 1 Hackathon
+================================================================================
+
+THE PROBLEM: Every AI tool is stateless — close the chat, it forgets everything
+THE SOLUTION: A persistent multi-agent chief of staff that remembers you
+
+Key Differentiator:
+• Persistent memory layer — stores facts, preferences, relationships across sessions

@@ -1,0 +1,22 @@
+# Cortex — Cohort Hackathon Dependencies
+# Google Cloud Gen AI Academy APAC 2026
+
+# ADK and Google AI
+google-adk>=1.14.0
+google-generativeai>=0.8.0
+google-auth>=2.27.0
+google-auth-oauthlib>=0.8.0
+
+# Database
+psycopg2-binary>=2.9.9
+
+# Gmail & Calendar APIs
+google-api-python-client>=2.115.0
+google-auth-httplib2>=0.2.0
+
+# Web framework
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Utilities
+python-dotenv>=1.0.0

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tasks — Cortex</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f1117; color: #e5e7eb; min-height: 100vh; }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+        header { text-align: center; padding: 30px 0; border-bottom: 1px solid #2d2d3a; margin-bottom: 30px; }
+        h1 { font-size: 2rem; color: #667eea; }
+        .subtitle { color: #6b7280; margin-top: 8px; }
+        nav { display: flex; justify-content: center; gap: 20px; padding: 16px 0; margin-bottom: 20px; }
+        nav a { color: #6b7280; text-decoration: none; padding: 8px 16px; border-radius: 8px; transition: all 0.2s; }
+        nav a:hover { color: #e5e7eb; background: #252633; }
+        nav a.active { color: #667eea; background: #252633; }
+        .filters { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .filter-btn { padding: 8px 16px; border-radius: 8px; border: 1px solid #2d2d3a; background: #1a1b23; color: #6b7280; cursor: pointer; font-size: 0.9rem; transition: all 0.2s; }
+        .filter-btn:hover, .filter-btn.active { border-color: #667eea; color: #667eea; background: #252633; }
+        .task-card { background: #1a1b23; border: 1px solid #2d2d3a; border-radius: 12px; padding: 18px 20px; margin-bottom: 12px; display: flex; align-items: flex-start; gap: 16px; }
+        .priority-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; flex-shrink: 0; }
+        .priority-urgent { background: #ef4444; }
+        .priority-high { background: #f97316; }
+        .priority-medium { background: #eab308; }
+        .priority-low { background: #6b7280; }
+        .task-content { flex: 1; }
+        .task-title { font-weight: 600; font-size: 1rem; margin-bottom: 4px; }
+        .task-desc { color: #9ca3af; font-size: 0.9rem; margin-bottom: 8px; }
+        .task-meta { display: flex; gap: 12px; font-size: 0.8rem; color: #6b7280; flex-wrap: wrap; }
+        .status-badge { padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
+        .status-pending { background: #1f2937; color: #9ca3af; }
+        .status-in_progress { background: #1e3a5f; color: #60a5fa; }
+        .status-blocked { background: #3f1f1f; color: #f87171; }
+        .status-done { background: #1f3f1f; color: #4ade80; text-decoration: line-through; }
+        .empty { text-align: center; color: #6b7280; padding: 40px; }
+        .section-header { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: #6b7280; margin: 20px 0 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📋 Tasks</h1>
+            <p class="subtitle">Your task list managed by Cortex</p>
+        </header>
+        <nav>
+            <a href="/">💬 Chat</a>
+            <a href="/memory">🧠 Memory</a>
+            <a href="/tasks" class="active">📋 Tasks</a>
+        </nav>
+        <div class="filters">
+            <button class="filter-btn active" onclick="filterTasks('all')">All</button>
+            <button class="filter-btn" onclick="filterTasks('pending')">Pending</button>
+            <button class="filter-btn" onclick="filterTasks('in_progress')">In Progress</button>
+            <button class="filter-btn" onclick="filterTasks('urgent')">Urgent</button>
+            <button class="filter-btn" onclick="filterTasks('high')">High</button>
+            <button class="filter-btn" onclick="filterTasks('done')">Done</button>
+        </div>
+        <div id="taskList">
+            <p class="empty">Loading tasks...</p>
+        </div>
+    </div>
+    <script>
+        let allTasks = [];
+        
+        async function loadTasks() {
+            try {
+                const res = await fetch('/api/tasks');
+                const data = await res.json();
+                allTasks = data.tasks || [];
+                renderTasks('all');
+            } catch (e) {
+                document.getElementById('taskList').innerHTML = '<p class="empty">Error loading tasks.</p>';
+            }
+        }
+        
+        function filterTasks(filter) {
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            renderTasks(filter);
+        }
+        
+        function renderTasks(filter) {
+            let tasks = allTasks;
+            if (filter === 'urgent') tasks = allTasks.filter(t => t.priority === 'urgent');
+            else if (filter === 'high') tasks = allTasks.filter(t => t.priority === 'high');
+            else if (filter !== 'all') tasks = allTasks.filter(t => t.status === filter);
+            
+            if (tasks.length === 0) {
+                document.getElementById('taskList').innerHTML = '<p class="empty">No tasks in this category.</p>';
+                return;
+            }
+            
+            document.getElementById('taskList').innerHTML = tasks.map(t => `
+                <div class="task-card">
+                    <div class="priority-dot priority-${t.priority}"></div>
+                    <div class="task-content">
+                        <div class="task-title">${t.title}</div>
+                        ${t.description ? `<div class="task-desc">${t.description}</div>` : ''}
+                        <div class="task-meta">
+                            <span class="status-badge status-${t.status}">${t.status.replace('_', ' ')}</span>
+                            <span>🔴 ${t.priority}</span>
+                            ${t.deadline ? `<span>📅 ${new Date(t.deadline).toLocaleDateString()}</span>` : ''}
+                            <span>#${t.id}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        loadTasks();
+    </script>
+</body>
+</html>

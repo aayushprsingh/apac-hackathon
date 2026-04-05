@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In — Cortex</title>
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <style>
@@ -23,7 +22,7 @@
             border: 1px solid #2d2d3a;
             border-radius: 20px;
             padding: 48px 40px;
-            max-width: 420px;
+            max-width: 440px;
             width: 90%;
             text-align: center;
         }
@@ -36,6 +35,11 @@
             margin-bottom: 8px;
         }
         .tagline { color: #6b7280; margin-bottom: 32px; font-size: 0.95rem; }
+
+        .error { background: #3f1f1f; border: 1px solid #f87171; border-radius: 8px; padding: 12px; color: #f87171; font-size: 0.9rem; margin-bottom: 16px; display: none; }
+        .info { background: #1f2937; border: 1px solid #4b5563; border-radius: 8px; padding: 12px; color: #9ca3af; font-size: 0.85rem; margin-bottom: 16px; text-align: left; display: none; }
+
+        /* Google Sign In Button */
         .google-btn {
             display: flex;
             align-items: center;
@@ -51,19 +55,57 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s;
-            margin-bottom: 20px;
+            margin-bottom: 14px;
         }
         .google-btn:hover { background: #2d2d3a; border-color: #667eea; }
         .google-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .google-btn svg { width: 20px; height: 20px; }
+
+        /* Demo / Guest Button */
+        .demo-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            width: 100%;
+            padding: 12px 24px;
+            border-radius: 12px;
+            border: 1px solid #3d3d4a;
+            background: transparent;
+            color: #9ca3af;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 8px;
+        }
+        .demo-btn:hover { background: #252633; color: white; border-color: #667eea; }
+
+        /* Firebase setup notice */
+        .setup-notice {
+            background: #2d1f0a;
+            border: 1px solid #92400e;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+            text-align: left;
+        }
+        .setup-notice-title { color: #f59e0b; font-size: 0.85rem; font-weight: 700; margin-bottom: 6px; }
+        .setup-notice-text { color: #92400e; font-size: 0.8rem; line-height: 1.5; }
+        .setup-notice code { background: #3d2a0a; padding: 1px 5px; border-radius: 3px; font-size: 0.78rem; }
+
+        .divider { border: none; border-top: 1px solid #2d2d3a; margin: 24px 0; }
+        .or-text { color: #6b7280; font-size: 0.85rem; margin: -12px 0 24px; position: relative; }
+        .or-text span { background: #1a1b23; padding: 0 10px; }
+
         .features { text-align: left; margin-top: 24px; }
         .feature { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
         .feature-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 2px; }
         .feature-text { font-size: 0.9rem; color: #9ca3af; line-height: 1.5; }
         .feature-text strong { color: #e5e7eb; }
-        .divider { border: none; border-top: 1px solid #2d2d3a; margin: 24px 0; }
+
         .privacy { font-size: 0.8rem; color: #6b7280; margin-top: 20px; line-height: 1.5; }
-        .error { background: #3f1f1f; border: 1px solid #f87171; border-radius: 8px; padding: 12px; color: #f87171; font-size: 0.9rem; margin-bottom: 16px; display: none; }
+
         .spinner {
             width: 20px; height: 20px;
             border: 2px solid #ffffff33;
@@ -82,7 +124,18 @@
         <p class="tagline">Your persistent productivity chief of staff</p>
 
         <div class="error" id="errorMsg"></div>
+        <div class="info" id="infoMsg"></div>
 
+        <!-- Firebase setup notice — shown when Firebase isn't configured -->
+        <div class="setup-notice" id="setupNotice">
+            <div class="setup-notice-title">⚠️ Firebase not configured</div>
+            <div class="setup-notice-text">
+                To enable real Google Sign-In, add Firebase credentials to <code>app/templates/login.html</code>.
+                For now, use <strong>Try as Guest</strong> below to explore the app.
+            </div>
+        </div>
+
+        <!-- Google Sign In (requires Firebase setup) -->
         <button class="google-btn" id="googleSignIn" onclick="signInWithGoogle()">
             <svg viewBox="0 0 24 24" fill="none">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -92,6 +145,13 @@
             </svg>
             <span id="btnText">Sign in with Google</span>
             <div class="spinner" id="spinner"></div>
+        </button>
+
+        <div class="or-text"><span>or</span></div>
+
+        <!-- Demo / Guest button — always works -->
+        <button class="demo-btn" id="demoBtn" onclick="tryAsGuest()">
+            🚀 Try as Guest — no account needed
         </button>
 
         <hr class="divider">
@@ -116,13 +176,12 @@
         </div>
 
         <p class="privacy">
-            By signing in, you agree to Cortex storing your profile, memory, and task data securely in Google Cloud.
+            By signing in, you agree to Cortex storing your profile, memory, and task data securely.
         </p>
     </div>
 
     <script>
         // Firebase Configuration
-        // Replace with your Firebase project config from https://console.firebase.google.com
         const firebaseConfig = {
             apiKey: "YOUR_FIREBASE_API_KEY",
             authDomain: "YOUR_PROJECT.firebaseapp.com",
@@ -132,114 +191,171 @@
             appId: "YOUR_APP_ID"
         };
 
-        // Initialize Firebase
-        let app, auth;
-        let firebaseReady = false;
-        try {
-            app = firebase.initializeApp(firebaseConfig);
-            auth = firebase.auth();
-            firebaseReady = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('YOUR_');
-            if (!firebaseReady) { auth = null; }
-        } catch (e) {
-            console.warn('Firebase not configured. Running in demo mode.');
-            auth = null;
+        let auth;
+        let firebaseConfigured = false;
+
+        // Check if Firebase is properly configured (not using placeholder values)
+        function isFirebaseConfigured() {
+            return firebaseConfig.apiKey &&
+                   !firebaseConfig.apiKey.includes('YOUR_') &&
+                   firebaseConfig.apiKey.length > 10;
         }
 
-        const API_BASE = ''; // Same origin
+        // Initialize Firebase
+        try {
+            if (isFirebaseConfigured()) {
+                firebase.initializeApp(firebaseConfig);
+                auth = firebase.auth();
+                firebaseConfigured = true;
+            } else {
+                auth = null;
+                document.getElementById('setupNotice').style.display = 'block';
+                document.getElementById('googleSignIn').disabled = true;
+                document.getElementById('googleSignIn').title = 'Firebase not configured — use "Try as Guest" below';
+            }
+        } catch (e) {
+            console.warn('Firebase initialization failed:', e);
+            auth = null;
+            document.getElementById('setupNotice').style.display = 'block';
+            document.getElementById('googleSignIn').disabled = true;
+        }
 
+        // Show info message
+        function showInfo(msg) {
+            const el = document.getElementById('infoMsg');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        // Show error message
+        function showError(msg) {
+            const el = document.getElementById('errorMsg');
+            el.textContent = msg;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 5000);
+        }
+
+        // Try as Guest — creates demo session without any OAuth
+        async function tryAsGuest() {
+            const btn = document.getElementById('demoBtn');
+            btn.disabled = true;
+            btn.textContent = 'Starting...';
+
+            try {
+                const response = await fetch('/api/auth/demo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to start demo');
+                }
+
+                const data = await response.json();
+                localStorage.setItem('cortex_token', data.token);
+                localStorage.setItem('cortex_mode', 'guest');
+
+                showInfo('Starting demo session...');
+                setTimeout(() => {
+                    window.location.href = '/dashboard?token=' + data.token;
+                }, 500);
+            } catch (e) {
+                showError('Failed to start demo: ' + e.message);
+                btn.disabled = false;
+                btn.textContent = '🚀 Try as Guest — no account needed';
+            }
+        }
+
+        // Sign in with Google — requires Firebase to be configured
         async function signInWithGoogle() {
+            if (!firebaseConfigured) {
+                showInfo('Google Sign-In requires Firebase setup. Use "Try as Guest" below to explore the app, or configure Firebase credentials first.');
+                return;
+            }
+
             const btn = document.getElementById('googleSignIn');
             const btnText = document.getElementById('btnText');
             const spinner = document.getElementById('spinner');
-            const errorEl = document.getElementById('errorMsg');
 
             btn.disabled = true;
             btnText.style.display = 'none';
-            spinner.style.display = 'block';
-            errorEl.style.display = 'none';
+            spinner.style.display = 'inline-block';
+            document.getElementById('errorMsg').style.display = 'none';
 
             try {
-                let sessionData;
+                const provider = new firebase.auth.GoogleAuthProvider();
+                provider.addScope('email');
+                provider.addScope('profile');
 
-                if (firebaseReady && auth) {
-                    // Real Firebase Google OAuth
-                    const provider = new firebase.auth.GoogleAuthProvider();
-                    provider.addScope('email');
-                    provider.addScope('profile');
-                    const result = await auth.signInWithPopup(provider);
-                    const idToken = await result.user.getIdToken();
+                const result = await auth.signInWithPopup(provider);
+                const idToken = await result.user.getIdToken();
 
-                    const response = await fetch('/api/auth/session', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id_token: idToken })
-                    });
+                const response = await fetch('/api/auth/session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id_token: idToken })
+                });
 
-                    if (!response.ok) {
-                        const err = await response.json();
-                        throw new Error(err.error || 'Session creation failed');
-                    }
-                    sessionData = await response.json();
-                    localStorage.setItem('cortex_token', sessionData.token);
-                    window.location.href = sessionData.needs_onboarding
-                        ? '/onboarding?token=' + sessionData.token
-                        : '/dashboard?token=' + sessionData.token;
-                } else {
-                    // Demo mode — create session directly without Firebase
-                    const response = await fetch('/api/auth/demo', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({})
-                    });
-                    if (!response.ok) throw new Error('Demo session failed');
-                    sessionData = await response.json();
-                    localStorage.setItem('cortex_token', sessionData.token);
-                    window.location.href = '/dashboard?token=' + sessionData.token;
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Session creation failed');
                 }
+
+                const data = await response.json();
+                localStorage.setItem('cortex_token', data.token);
+                localStorage.setItem('cortex_mode', 'google');
+                localStorage.setItem('cortex_user_email', result.user.email);
+                localStorage.setItem('cortex_user_name', result.user.displayName || result.user.email);
+
+                window.location.href = data.needs_onboarding
+                    ? '/onboarding?token=' + data.token
+                    : '/dashboard?token=' + data.token;
+
             } catch (error) {
                 console.error('Sign in error:', error);
-                errorEl.textContent = error.message || 'Sign in failed. Please try again.';
-                errorEl.style.display = 'block';
+                let msg = error.message || 'Sign in failed';
+
+                // Handle Firebase auth errors
+                if (error.code === 'auth/popup-closed-by-user') {
+                    msg = 'Sign-in popup was closed. Please try again.';
+                } else if (error.code === 'auth/network-request-failed') {
+                    msg = 'Network error. Check your connection and try again.';
+                }
+
+                showError(msg);
                 btn.disabled = false;
                 btnText.style.display = 'inline';
                 spinner.style.display = 'none';
             }
         }
 
-        // Check for existing session on load
+        // Check for existing valid session on page load
         async function checkExistingSession() {
-            // Check localStorage first
-            const storedToken = localStorage.getItem('cortex_token');
-            if (storedToken) {
-                try {
-                    const response = await fetch('/api/auth/me', {
-                        headers: { 'Authorization': 'Bearer ' + storedToken }
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        window.location.href = data.needs_onboarding ? '/onboarding?token=' + storedToken : '/dashboard?token=' + storedToken;
-                        return;
-                    }
-                } catch (e) {}
-            }
+            const token = localStorage.getItem('cortex_token');
+            if (!token) return;
 
-            // Fallback: check URL token param
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlToken = urlParams.get('token');
-            if (urlToken) {
-                try {
-                    const response = await fetch('/api/auth/me', {
-                        headers: { 'Authorization': 'Bearer ' + urlToken }
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        localStorage.setItem('cortex_token', urlToken);
-                        window.location.href = data.needs_onboarding ? '/onboarding?token=' + urlToken : '/dashboard?token=' + urlToken;
-                        return;
-                    }
-                } catch (e) {}
+            try {
+                const response = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    window.location.href = data.needs_onboarding
+                        ? '/onboarding?token=' + token
+                        : '/dashboard?token=' + token;
+                } else {
+                    // Token invalid — clear it
+                    localStorage.removeItem('cortex_token');
+                    localStorage.removeItem('cortex_mode');
+                }
+            } catch (e) {
+                // Network error — stay on login page
             }
         }
+
         checkExistingSession();
     </script>
 </body>

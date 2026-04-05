@@ -531,7 +531,18 @@
         }
 
         async function signOut() {
-            if (auth) await auth.signOut();
+            const confirmed = confirm('Are you sure you want to sign out of Cortex?\n\nYour data will remain saved for when you sign back in.');
+            if (!confirmed) return;
+
+            localStorage.removeItem('cortex_token');
+            localStorage.removeItem('cortex_mode');
+            localStorage.removeItem('cortex_user_email');
+            localStorage.removeItem('cortex_user_name');
+
+            if (firebaseReady && auth) {
+                await auth.signOut();
+            }
+
             window.location.href = '/login';
         }
 

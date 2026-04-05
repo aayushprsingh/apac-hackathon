@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Get Started — Cortex</title>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f1117;
+            color: #e5e7eb;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 680px; margin: 0 auto; }
+        header { padding: 20px 0 30px; }
+        .logo { font-size: 2rem; margin-bottom: 4px; }
+        h1 { font-size: 1.6rem; color: #e5e7eb; margin-bottom: 6px; }
+        .subtitle { color: #6b7280; font-size: 0.9rem; }
+        .progress { display: flex; gap: 8px; margin-bottom: 32px; }
+        .progress-step {
+            height: 4px;
+            flex: 1;
+            border-radius: 2px;
+            background: #2d2d3a;
+            transition: background 0.3s;
+        }
+        .progress-step.active { background: #667eea; }
+        .progress-step.done { background: #10b981; }
+        .card {
+            background: #1a1b23;
+            border: 1px solid #2d2d3a;
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 16px;
+        }
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: #667eea;
+        }
+        .card-desc { font-size: 0.85rem; color: #6b7280; margin-bottom: 20px; }
+        label { display: block; font-size: 0.9rem; font-weight: 600; margin-bottom: 6px; color: #d1d5db; }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid #2d2d3a;
+            background: #0f1117;
+            color: white;
+            font-size: 0.95rem;
+            font-family: inherit;
+            margin-bottom: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus, textarea:focus, select:focus { border-color: #667eea; }
+        textarea { resize: vertical; min-height: 80px; }
+        .hint { font-size: 0.78rem; color: #6b7280; margin-top: -10px; margin-bottom: 14px; }
+        .btn-row { display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px; }
+        button {
+            padding: 12px 28px;
+            border-radius: 10px;
+            border: none;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-secondary { background: #252633; color: #9ca3af; }
+        .btn-secondary:hover { background: #2d2d3a; color: white; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5a6fd6; }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .person-card, .project-card {
+            background: #0f1117;
+            border: 1px solid #2d2d3a;
+            border-radius: 10px;
+            padding: 14px;
+            margin-bottom: 10px;
+        }
+        .person-card input, .project-card input {
+            margin-bottom: 8px;
+            background: #1a1b23;
+        }
+        .person-card .remove, .project-card .remove {
+            font-size: 0.8rem;
+            color: #f87171;
+            cursor: pointer;
+            float: right;
+        }
+        .add-link {
+            color: #667eea;
+            font-size: 0.9rem;
+            cursor: pointer;
+            margin-bottom: 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .add-link:hover { text-decoration: underline; }
+        .spinner {
+            width: 16px; height: 16px;
+            border: 2px solid #ffffff33;
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .flash { background: #1f3f1f; border: 1px solid #4ade80; border-radius: 8px; padding: 12px; color: #4ade80; font-size: 0.9rem; margin-bottom: 16px; display: none; }
+        .error { background: #3f1f1f; border: 1px solid #f87171; border-radius: 8px; padding: 12px; color: #f87171; font-size: 0.9rem; margin-bottom: 16px; display: none; }
+        .logged-in-as { font-size: 0.85rem; color: #6b7280; margin-bottom: 20px; }
+        .logged-in-as strong { color: #9ca3af; }
+        .skip-link { font-size: 0.85rem; color: #6b7280; cursor: pointer; margin-top: 12px; display: inline-block; }
+        .skip-link:hover { color: #9ca3af; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">🧠</div>
+            <h1>Set up your Cortex</h1>
+            <p class="subtitle">Tell Cortex a bit about yourself — it builds a memory model from this</p>
+        </header>
+
+        <div class="progress">
+            <div class="progress-step active" id="step1"></div>
+            <div class="progress-step" id="step2"></div>
+            <div class="progress-step" id="step3"></div>
+        </div>
+
+        <div id="flashMsg" class="flash"></div>
+        <div id="errorMsg" class="error"></div>
+
+        <!-- STEP 1: About You -->
+        <div class="card" id="card1">
+            <div class="card-title">👤 About You</div>
+            <div class="card-desc">Basic info to personalize your experience</div>
+
+            <label>Your name *</label>
+            <input type="text" id="userName" placeholder="e.g. Priya Sharma">
+
+            <label>Your email (auto-detected)</label>
+            <input type="email" id="userEmail" placeholder="Detected from your Google account" readonly>
+
+            <label>How you want Cortex to address you</label>
+            <input type="text" id="preferredName" placeholder="e.g. Priya">
+
+            <label>Briefing style preference</label>
+            <select id="briefingStyle">
+                <option value="concise">Concise — bullet points, get to the point</option>
+                <option value="detailed">Detailed — more context and explanation</option>
+                <option value="balanced" selected>Balanced — right amount of detail</option>
+            </select>
+
+            <label>Typical working hours</label>
+            <input type="text" id="workingHours" placeholder="e.g. 9am-6pm IST">
+
+            <div class="btn-row">
+                <button class="btn-primary" onclick="goToStep(2)">Continue →</button>
+            </div>
+        </div>
+
+        <!-- STEP 2: Key People -->
+        <div class="card" id="card2" style="display:none;">
+            <div class="card-title">👥 Key People</div>
+            <div class="card-desc">People you regularly interact with — Cortex will remember context about them</div>
+
+            <div id="peopleList"></div>
+            <span class="add-link" onclick="addPerson()">+ Add a person</span>
+
+            <div class="btn-row">
+                <button class="btn-secondary" onclick="goToStep(1)">← Back</button>
+                <button class="btn-primary" onclick="goToStep(3)">Continue →</button>
+            </div>
+        </div>
+
+        <!-- STEP 3: Projects & Goals -->
+        <div class="card" id="card3" style="display:none;">
+            <div class="card-title">💼 Projects & Goals</div>
+            <div class="card-desc">What you're working on right now</div>
+
+            <label>Current project / focus area</label>
+            <input type="text" id="currentProject" placeholder="e.g. Building a farm management SaaS">
+
+            <label>Project stage</label>
+            <select id="projectStage">
+                <option value="ideation">Ideation / Planning</option>
+                <option value="building" selected>Building / Development</option>
+                <option value="launching">Launching / Go-to-market</option>
+                <option value="growing">Growing / Scaling</option>
+                <option value="maintenance">Maintenance / Iteration</option>
+            </select>
+
+            <label>This week's top 3 goals</label>
+            <textarea id="weeklyGoals" placeholder="1. Finish user research&#10;2. Ship the login flow&#10;3. Talk to 3 potential customers"></textarea>
+
+            <label>Any urgent follow-ups? (people waiting on you)</label>
+            <textarea id="pendingFollowups" placeholder="e.g. Rahul — waiting on me for contract review&#10;e.g. Team — waiting on design sign-off"></textarea>
+
+            <div class="btn-row">
+                <button class="btn-secondary" onclick="goToStep(2)">← Back</button>
+                <button class="btn-primary" onclick="finishOnboarding()" id="finishBtn">
+                    <span id="finishText">Complete Setup →</span>
+                    <span id="finishSpinner" class="spinner" style="display:none;"></span>
+                </button>
+            </div>
+            <span class="skip-link" onclick="finishOnboarding()">Skip — I'll configure later</span>
+        </div>
+
+        <p class="logged-in-as" id="loggedInAs"></p>
+    </div>
+
+    <script>
+        // Firebase config (same as login.html)
+        const firebaseConfig = {
+            apiKey: "YOUR_FIREBASE_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        let app, auth, idToken = null;
+        let userEmail = '';
+        let peopleCount = 0;
+        let firebaseReady = false;
+
+        try {
+            firebase.initializeApp(firebaseConfig, 'onboarding');
+            auth = firebase.auth();
+            firebaseReady = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('YOUR_');
+            if (!firebaseReady) { auth = null; }
+        } catch (e) {
+            console.warn('Firebase not configured.');
+            auth = null;
+        }
+
+        // Wait for auth state
+        async function init() {
+            if (firebaseReady && auth) {
+                auth.onAuthStateChanged(async (user) => {
+                    if (!user) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    idToken = await user.getIdToken();
+                    userEmail = user.email;
+                    document.getElementById('userEmail').value = user.email;
+                    document.getElementById('loggedInAs').innerHTML = 'Signed in as <strong>' + user.email + '</strong>';
+                });
+            } else {
+                // Demo mode — use cookie session
+                const cookies = document.cookie.split(';').reduce((acc, c) => {
+                    const [k, v] = c.trim().split('=');
+                    acc[k] = v;
+                    return acc;
+                }, {});
+                if (!cookies.cortex_token) {
+                    window.location.href = '/login';
+                    return;
+                }
+                idToken = cookies.cortex_token;
+                document.getElementById('userEmail').value = 'demo@example.com';
+                document.getElementById('userEmail').placeholder = 'demo@example.com';
+                document.getElementById('loggedInAs').innerHTML = 'Demo mode — <strong>your data is private</strong>';
+            }
+        }
+
+        function goToStep(n) {
+            // Validate current step
+            if (n === 2 && !document.getElementById('userName').value.trim()) {
+                showError('Please enter your name');
+                return;
+            }
+            document.getElementById('errorMsg').style.display = 'none';
+
+            document.querySelectorAll('.card').forEach(c => c.style.display = 'none');
+            document.getElementById('card' + n).style.display = 'block';
+
+            document.querySelectorAll('.progress-step').forEach((s, i) => {
+                s.className = 'progress-step ' + (i + 1 < n ? 'done' : i + 1 === n ? 'active' : '');
+            });
+        }
+
+        function showError(msg) {
+            const el = document.getElementById('errorMsg');
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+
+        function showFlash(msg) {
+            const el = document.getElementById('flashMsg');
+            el.textContent = msg;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 4000);
+        }
+
+        function addPerson(name = '', context = '', relationship = '') {
+            const list = document.getElementById('peopleList');
+            const id = peopleCount++;
+            const card = document.createElement('div');
+            card.className = 'person-card';
+            card.id = 'person_' + id;
+            card.innerHTML = `
+                <span class="remove" onclick="removePerson(${id})">remove</span>
+                <label>Name</label>
+                <input type="text" class="person-name" value="${name}" placeholder="e.g. Rahul">
+                <label>Relationship / Context</label>
+                <input type="text" class="person-context" value="${context}" placeholder="e.g. Investor, 15% equity, ₹50L">
+                <label>Current status</label>
+                <input type="text" class="person-status" value="${relationship}" placeholder="e.g. waiting on me, following up">
+            `;
+            list.appendChild(card);
+        }
+
+        function removePerson(id) {
+            document.getElementById('person_' + id).remove();
+        }
+
+        function getPeople() {
+            const cards = document.querySelectorAll('.person-card');
+            return Array.from(cards).map(card => ({
+                name: card.querySelector('.person-name').value.trim(),
+                context: card.querySelector('.person-context').value.trim(),
+                status: card.querySelector('.person-status').value.trim()
+            })).filter(p => p.name);
+        }
+
+        async function finishOnboarding() {
+            const btn = document.getElementById('finishBtn');
+            const btnText = document.getElementById('finishText');
+            const spinner = document.getElementById('finishSpinner');
+
+            btn.disabled = true;
+            btnText.style.display = 'none';
+            spinner.style.display = 'inline-block';
+
+            const profile = {
+                name: document.getElementById('userName').value.trim(),
+                email: userEmail || document.getElementById('userEmail').value.trim(),
+                preferred_name: document.getElementById('preferredName').value.trim() || undefined,
+                briefing_style: document.getElementById('briefingStyle').value,
+                working_hours: document.getElementById('workingHours').value.trim() || undefined,
+                people: getPeople(),
+                current_project: {
+                    name: document.getElementById('currentProject').value.trim(),
+                    stage: document.getElementById('projectStage').value
+                },
+                weekly_goals: document.getElementById('weeklyGoals').value.trim(),
+                pending_followups: document.getElementById('pendingFollowups').value.trim()
+            };
+
+            try {
+                const response = await fetch('/api/auth/onboarding', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...(idToken ? { 'Authorization': 'Bearer ' + idToken } : {})
+                    },
+                    body: JSON.stringify(profile)
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || 'Failed to save profile');
+                }
+
+                showFlash('Profile saved! Redirecting to your dashboard...');
+                setTimeout(() => window.location.href = '/dashboard', 1500);
+            } catch (e) {
+                showError(e.message || 'Something went wrong. Please try again.');
+                btn.disabled = false;
+                btnText.style.display = 'inline';
+                spinner.style.display = 'none';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

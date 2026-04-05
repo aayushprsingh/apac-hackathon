@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In — Cortex</title>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f1117;
+            color: #e5e7eb;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .login-card {
+            background: #1a1b23;
+            border: 1px solid #2d2d3a;
+            border-radius: 20px;
+            padding: 48px 40px;
+            max-width: 420px;
+            width: 90%;
+            text-align: center;
+        }
+        .logo { font-size: 3rem; margin-bottom: 8px; }
+        h1 {
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+        .tagline { color: #6b7280; margin-bottom: 32px; font-size: 0.95rem; }
+        .google-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            width: 100%;
+            padding: 14px 24px;
+            border-radius: 12px;
+            border: 1px solid #3d3d4a;
+            background: #252633;
+            color: white;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 20px;
+        }
+        .google-btn:hover { background: #2d2d3a; border-color: #667eea; }
+        .google-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .google-btn svg { width: 20px; height: 20px; }
+        .features { text-align: left; margin-top: 24px; }
+        .feature { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
+        .feature-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 2px; }
+        .feature-text { font-size: 0.9rem; color: #9ca3af; line-height: 1.5; }
+        .feature-text strong { color: #e5e7eb; }
+        .divider { border: none; border-top: 1px solid #2d2d3a; margin: 24px 0; }
+        .privacy { font-size: 0.8rem; color: #6b7280; margin-top: 20px; line-height: 1.5; }
+        .error { background: #3f1f1f; border: 1px solid #f87171; border-radius: 8px; padding: 12px; color: #f87171; font-size: 0.9rem; margin-bottom: 16px; display: none; }
+        .spinner {
+            width: 20px; height: 20px;
+            border: 2px solid #ffffff33;
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="logo">🧠</div>
+        <h1>Cortex</h1>
+        <p class="tagline">Your persistent productivity chief of staff</p>
+
+        <div class="error" id="errorMsg"></div>
+
+        <button class="google-btn" id="googleSignIn" onclick="signInWithGoogle()">
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            <span id="btnText">Sign in with Google</span>
+            <div class="spinner" id="spinner"></div>
+        </button>
+
+        <hr class="divider">
+
+        <div class="features">
+            <div class="feature">
+                <span class="feature-icon">🧠</span>
+                <div class="feature-text"><strong>Persistent memory</strong> — Cortex remembers your projects, people, and commitments across every session</div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">📅</span>
+                <div class="feature-text"><strong>Calendar + email integrated</strong> — Your schedule and inbox, assembled into one briefing</div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">✅</span>
+                <div class="feature-text"><strong>Checkpoint workflows</strong> — Every email drafted for your review before sending</div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">🔒</span>
+                <div class="feature-text"><strong>Your data, your account</strong> — Separate memory and tasks for every user</div>
+            </div>
+        </div>
+
+        <p class="privacy">
+            By signing in, you agree to Cortex storing your profile, memory, and task data securely in Google Cloud.
+        </p>
+    </div>
+
+    <script>
+        // Firebase Configuration
+        // Replace with your Firebase project config from https://console.firebase.google.com
+        const firebaseConfig = {
+            apiKey: "YOUR_FIREBASE_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        let app, auth;
+        let firebaseReady = false;
+        try {
+            app = firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+            firebaseReady = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('YOUR_');
+            if (!firebaseReady) { auth = null; }
+        } catch (e) {
+            console.warn('Firebase not configured. Running in demo mode.');
+            auth = null;
+        }
+
+        const API_BASE = ''; // Same origin
+
+        async function signInWithGoogle() {
+            const btn = document.getElementById('googleSignIn');
+            const btnText = document.getElementById('btnText');
+            const spinner = document.getElementById('spinner');
+            const errorEl = document.getElementById('errorMsg');
+
+            btn.disabled = true;
+            btnText.style.display = 'none';
+            spinner.style.display = 'block';
+            errorEl.style.display = 'none';
+
+            try {
+                let sessionData;
+
+                if (firebaseReady && auth) {
+                    // Real Firebase Google OAuth
+                    const provider = new firebase.auth.GoogleAuthProvider();
+                    provider.addScope('email');
+                    provider.addScope('profile');
+                    const result = await auth.signInWithPopup(provider);
+                    const idToken = await result.user.getIdToken();
+
+                    const response = await fetch('/api/auth/session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id_token: idToken })
+                    });
+
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error || 'Session creation failed');
+                    }
+                    sessionData = await response.json();
+                } else {
+                    // Demo mode — create session directly
+                    const response = await fetch('/api/auth/demo', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    if (!response.ok) throw new Error('Demo session failed');
+                    sessionData = await response.json();
+                    // Set cookie manually for demo
+                    document.cookie = `cortex_token=${sessionData.token}; path=/; max-age=${86400*30}; samesite=Lax`;
+                }
+
+                if (sessionData.needs_onboarding) {
+                    window.location.href = '/onboarding';
+                } else {
+                    window.location.href = '/dashboard';
+                }
+            } catch (error) {
+                console.error('Sign in error:', error);
+                errorEl.textContent = error.message || 'Sign in failed. Please try again.';
+                errorEl.style.display = 'block';
+                btn.disabled = false;
+                btnText.style.display = 'inline';
+                spinner.style.display = 'none';
+            }
+        }
+
+        // Check for existing session on load
+        async function checkExistingSession() {
+            if (firebaseReady && auth) {
+                auth.onAuthStateChanged(async (user) => {
+                    if (user) {
+                        try {
+                            const response = await fetch('/api/auth/me', {
+                                headers: { 'Authorization': 'Bearer ' + await user.getIdToken() }
+                            });
+                            if (response.ok) {
+                                const data = await response.json();
+                                window.location.href = data.needs_onboarding ? '/onboarding' : '/dashboard';
+                            }
+                        } catch (e) {}
+                    }
+                });
+            } else {
+                // Check for demo session cookie
+                const cookies = document.cookie.split(';').reduce((acc, c) => {
+                    const [k, v] = c.trim().split('=');
+                    acc[k] = v;
+                    return acc;
+                }, {});
+                if (cookies.cortex_token) {
+                    try {
+                        const response = await fetch('/api/auth/me', {
+                            headers: { 'Authorization': 'Bearer ' + cookies.cortex_token }
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            window.location.href = data.needs_onboarding ? '/onboarding' : '/dashboard';
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+        checkExistingSession();
+    </script>
+</body>
+</html>

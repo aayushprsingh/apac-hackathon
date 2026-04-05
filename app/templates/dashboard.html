@@ -4,179 +4,450 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cortex — Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #0f1117;
-            color: #e5e7eb;
-            min-height: 100vh;
+        :root {
+            --bg: #f8f9fc;
+            --surface: #ffffff;
+            --surface-2: #f1f3f8;
+            --border: #e2e6f0;
+            --text-primary: #111827;
+            --text-secondary: #6b7280;
+            --text-muted: #9ca3af;
+            --accent: #5b21b6;
+            --accent-light: #ede9fe;
+            --accent-hover: #4c1d95;
+            --danger: #dc2626;
+            --success: #16a34a;
+            --warning: #d97706;
+            --radius: 12px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-lg: 0 10px 30px rgba(0,0,0,0.08);
+            --sidebar-width: 240px;
+            --nav-height: 60px;
         }
-        /* TOP NAV */
+
+        [data-theme="dark"] {
+            --bg: #0d0e14;
+            --surface: #161820;
+            --surface-2: #1e2029;
+            --border: #2a2c38;
+            --text-primary: #f0f1f4;
+            --text-secondary: #8b8fa8;
+            --text-muted: #5b6070;
+            --accent: #a78bfa;
+            --accent-light: #1e1735;
+            --accent-hover: #c4b5fd;
+            --shadow: 0 1px 3px rgba(0,0,0,0.3);
+            --shadow-lg: 0 10px 30px rgba(0,0,0,0.4);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        /* ===== TOP NAV ===== */
         .topnav {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 14px 24px;
-            background: #1a1b23;
-            border-bottom: 1px solid #2d2d3a;
+            padding: 0 24px;
+            height: var(--nav-height);
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
             position: sticky;
             top: 0;
             z-index: 100;
+            backdrop-filter: blur(12px);
         }
-        .nav-brand { display: flex; align-items: center; gap: 10px; }
-        .nav-logo { font-size: 1.4rem; }
-        .nav-title { font-weight: 700; font-size: 1rem; color: #667eea; }
-        .nav-right { display: flex; align-items: center; gap: 12px; }
-        .nav-user { font-size: 0.85rem; color: #6b7280; }
-        .nav-user strong { color: #9ca3af; }
-        .btn-signout {
-            padding: 7px 16px;
-            border-radius: 8px;
-            border: 1px solid #3d3d4a;
-            background: transparent;
-            color: #9ca3af;
-            font-size: 0.85rem;
+
+        .nav-left { display: flex; align-items: center; gap: 12px; }
+        .nav-logo { width: 32px; height: 32px; background: var(--accent); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+        .nav-title { font-weight: 700; font-size: 1rem; color: var(--text-primary); }
+        .nav-status { font-size: 0.75rem; padding: 3px 10px; border-radius: 20px; background: var(--accent-light); color: var(--accent); font-weight: 600; }
+
+        .nav-right { display: flex; align-items: center; gap: 10px; }
+        .nav-user { font-size: 0.85rem; color: var(--text-secondary); }
+        .nav-user strong { color: var(--text-primary); font-weight: 500; }
+
+        .icon-btn {
+            width: 36px; height: 36px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text-secondary);
             cursor: pointer;
-            transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.15s;
+            font-size: 1rem;
         }
-        .btn-signout:hover { background: #252633; color: white; }
-        /* LAYOUT */
-        .layout { display: flex; min-height: calc(100vh - 60px); }
-        /* SIDEBAR */
+        .icon-btn:hover { background: var(--surface-2); color: var(--text-primary); }
+        .btn-signout { padding: 0 14px; width: auto; font-size: 0.82rem; font-weight: 500; color: var(--text-secondary); }
+        .btn-signout:hover { color: var(--danger); border-color: var(--danger); }
+
+        /* ===== LAYOUT ===== */
+        .layout { display: flex; min-height: calc(100vh - var(--nav-height)); }
+
+        /* ===== SIDEBAR ===== */
         .sidebar {
-            width: 240px;
-            background: #1a1b23;
-            border-right: 1px solid #2d2d3a;
+            width: var(--sidebar-width);
+            background: var(--surface);
+            border-right: 1px solid var(--border);
             padding: 20px 0;
             flex-shrink: 0;
+            position: sticky;
+            top: var(--nav-height);
+            height: calc(100vh - var(--nav-height));
+            overflow-y: auto;
         }
+
         .sidebar-section { margin-bottom: 24px; }
         .sidebar-label {
-            font-size: 0.7rem;
+            font-size: 0.68rem;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #6b7280;
-            padding: 0 20px;
-            margin-bottom: 8px;
+            letter-spacing: 1.2px;
+            font-weight: 700;
+            color: var(--text-muted);
+            padding: 0 16px;
+            margin-bottom: 6px;
         }
+
         .sidebar-link {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 10px 20px;
-            color: #9ca3af;
+            padding: 9px 16px;
+            color: var(--text-secondary);
             text-decoration: none;
-            font-size: 0.9rem;
-            transition: all 0.15s;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.12s;
             cursor: pointer;
+            border-left: 3px solid transparent;
         }
-        .sidebar-link:hover { background: #252633; color: white; }
-        .sidebar-link.active { background: #252633; color: #667eea; border-right: 2px solid #667eea; }
-        /* MAIN */
-        .main { flex: 1; display: flex; flex-direction: column; max-width: 800px; margin: 0 auto; width: 100%; }
-        /* CHAT */
+        .sidebar-link:hover { background: var(--surface-2); color: var(--text-primary); }
+        .sidebar-link.active { background: var(--accent-light); color: var(--accent); border-left-color: var(--accent); }
+
+        .sidebar-link .count-badge {
+            margin-left: auto;
+            background: var(--accent);
+            color: white;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 10px;
+            min-width: 20px;
+            text-align: center;
+        }
+
+        /* ===== MAIN ===== */
+        .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+        /* ===== CHAT ===== */
         .chat-container { flex: 1; display: flex; flex-direction: column; }
-        .messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; min-height: 400px; }
-        .message { max-width: 78%; padding: 12px 16px; border-radius: 16px; line-height: 1.6; white-space: pre-wrap; font-size: 0.92rem; }
-        .message.user { align-self: flex-end; background: #4f46e5; color: white; border-bottom-right-radius: 4px; }
-        .message.cortex { align-self: flex-start; background: #252633; border: 1px solid #2d2d3a; border-bottom-left-radius: 4px; }
-        .message.system { align-self: center; background: transparent; color: #6b7280; font-size: 0.82rem; text-align: center; font-style: italic; }
-        .input-area { display: flex; padding: 16px 20px; border-top: 1px solid #2d2d3a; gap: 10px; background: #1a1b23; }
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 28px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            min-height: 400px;
+            max-width: 860px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        .message {
+            max-width: 75%;
+            padding: 13px 18px;
+            border-radius: 16px;
+            line-height: 1.7;
+            white-space: pre-wrap;
+            font-size: 0.92rem;
+            animation: msgIn 0.2s ease;
+        }
+        @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        .message.user {
+            align-self: flex-end;
+            background: var(--accent);
+            color: white;
+            border-bottom-right-radius: 4px;
+            box-shadow: 0 2px 8px rgba(91,33,182,0.25);
+        }
+        .message.cortex {
+            align-self: flex-start;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 4px;
+            box-shadow: var(--shadow);
+        }
+        .message.system {
+            align-self: center;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            text-align: center;
+            font-style: italic;
+        }
+        .message.cortex + .message.cortex { margin-top: -8px; }
+
+        /* ===== INPUT AREA ===== */
+        .input-area {
+            display: flex;
+            padding: 16px 24px;
+            border-top: 1px solid var(--border);
+            gap: 10px;
+            background: var(--surface);
+            max-width: 860px;
+            width: 100%;
+            margin: 0 auto;
+        }
         .input-area input {
             flex: 1;
             padding: 12px 16px;
             border-radius: 12px;
-            border: 1px solid #2d2d3a;
-            background: #0f1117;
-            color: white;
-            font-size: 0.95rem;
+            border: 1.5px solid var(--border);
+            background: var(--surface-2);
+            color: var(--text-primary);
+            font-size: 0.92rem;
+            font-family: inherit;
             outline: none;
+            transition: border-color 0.2s;
         }
-        .input-area input:focus { border-color: #667eea; }
+        .input-area input:focus { border-color: var(--accent); background: var(--surface); }
+        .input-area input::placeholder { color: var(--text-muted); }
+
         .send-btn {
             padding: 12px 20px;
             border-radius: 12px;
             border: none;
-            background: #667eea;
+            background: var(--accent);
             color: white;
             font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .send-btn:hover { background: #5a6fd6; }
-        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        /* QUICK ACTIONS */
-        .quick-actions { padding: 16px 20px; background: #16171e; border-top: 1px solid #2d2d3a; display: flex; gap: 8px; flex-wrap: wrap; }
-        .quick-btn {
-            padding: 6px 14px;
-            border-radius: 20px;
-            border: 1px solid #2d2d3a;
-            background: #1a1b23;
-            color: #9ca3af;
-            font-size: 0.82rem;
+            font-size: 0.88rem;
             cursor: pointer;
             transition: all 0.15s;
+            font-family: inherit;
         }
-        .quick-btn:hover { border-color: #667eea; color: #667eea; }
-        /* PAGE SECTIONS */
-        .page { display: none; padding: 24px; }
+        .send-btn:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(91,33,182,0.3); }
+        .send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+        /* ===== QUICK ACTIONS ===== */
+        .quick-actions {
+            padding: 12px 24px;
+            background: var(--bg);
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            max-width: 860px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .quick-btn {
+            display: flex; align-items: center; gap: 5px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            border: 1.5px solid var(--border);
+            background: var(--surface);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.12s;
+            font-family: inherit;
+        }
+        .quick-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+
+        /* ===== PAGES ===== */
+        .page { display: none; padding: 28px; }
         .page.active { display: block; }
-        .page-header { margin-bottom: 20px; }
-        .page-title { font-size: 1.4rem; font-weight: 700; margin-bottom: 4px; }
-        .page-desc { color: #6b7280; font-size: 0.9rem; }
-        /* MEMORY PAGE */
+        .page-header { margin-bottom: 24px; }
+        .page-title { font-size: 1.4rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; }
+        .page-desc { color: var(--text-secondary); font-size: 0.88rem; }
+
+        /* ===== STAT CARDS ===== */
+        .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 28px; }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+            box-shadow: var(--shadow);
+        }
+        .stat-value { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+        .stat-label { font-size: 0.78rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px; }
+
+        /* ===== MEMORY ===== */
         .memory-grid { display: grid; gap: 14px; }
-        .memory-card { background: #1a1b23; border: 1px solid #2d2d3a; border-radius: 12px; padding: 18px; }
-        .memory-key { font-weight: 700; color: #667eea; font-size: 0.95rem; margin-bottom: 8px; }
-        .memory-value { color: #d1d5db; font-size: 0.88rem; line-height: 1.6; white-space: pre-wrap; }
-        .memory-meta { margin-top: 10px; font-size: 0.78rem; color: #6b7280; }
-        .confidence { display: inline-block; padding: 2px 8px; border-radius: 4px; background: #252633; margin-right: 6px; }
-        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; }
-        .badge-chat { background: #4f46e5; color: white; }
-        .badge-explicit { background: #d97706; color: white; }
-        .badge-email { background: #059669; color: white; }
-        /* TASKS PAGE */
+        .memory-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+            box-shadow: var(--shadow);
+            transition: box-shadow 0.15s;
+        }
+        .memory-card:hover { box-shadow: var(--shadow-lg); }
+        .memory-key { font-weight: 700; color: var(--accent); font-size: 0.92rem; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .memory-value { color: var(--text-primary); font-size: 0.88rem; line-height: 1.65; white-space: pre-wrap; }
+        .memory-meta { margin-top: 12px; font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .badge {
+            display: inline-flex; align-items: center;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+        .badge-chat { background: var(--accent-light); color: var(--accent); }
+        .badge-explicit { background: #fef3c7; color: #92400e; }
+        .badge-email-badge { background: #dcfce7; color: #166534; }
+        .confidence { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 6px; background: var(--surface-2); color: var(--text-muted); font-size: 0.72rem; }
+
+        /* ===== TASKS ===== */
         .task-list { display: flex; flex-direction: column; gap: 10px; }
-        .task-item { background: #1a1b23; border: 1px solid #2d2d3a; border-radius: 12px; padding: 14px 16px; display: flex; gap: 14px; align-items: flex-start; }
+        .task-item {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 18px;
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+            box-shadow: var(--shadow);
+            transition: box-shadow 0.15s;
+        }
+        .task-item:hover { box-shadow: var(--shadow-lg); }
+        .task-item.done { opacity: 0.6; }
         .priority-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
-        .priority-urgent { background: #ef4444; }
-        .priority-high { background: #f97316; }
+        .priority-urgent { background: var(--danger); box-shadow: 0 0 0 3px rgba(220,38,38,0.15); }
+        .priority-high { background: var(--warning); }
         .priority-medium { background: #eab308; }
-        .priority-low { background: #6b7280; }
-        .task-content { flex: 1; }
+        .priority-low { background: var(--text-muted); }
+        .task-content { flex: 1; min-width: 0; }
         .task-title { font-weight: 600; font-size: 0.92rem; margin-bottom: 4px; }
-        .task-desc { font-size: 0.82rem; color: #6b7280; margin-bottom: 6px; }
-        .task-meta { font-size: 0.78rem; color: #6b7280; display: flex; gap: 12px; }
-        .status-badge { padding: 2px 10px; border-radius: 12px; font-size: 0.75rem; font-weight: 600; }
-        .status-pending { background: #1f2937; color: #9ca3af; }
-        .status-done { background: #1f3f1f; color: #4ade80; }
-        /* PROFILE PAGE */
-        .profile-section { background: #1a1b23; border: 1px solid #2d2d3a; border-radius: 14px; padding: 20px; margin-bottom: 16px; }
-        .profile-section h3 { font-size: 0.95rem; color: #667eea; margin-bottom: 14px; }
-        .profile-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 12px; }
-        .profile-field label { display: block; font-size: 0.8rem; color: #6b7280; margin-bottom: 4px; }
-        .profile-field p { font-size: 0.92rem; color: #e5e7eb; }
-        .typing { color: #6b7280; font-style: italic; font-size: 0.85rem; padding: 10px 0; }
-        /* RESPONSIVE */
+        .task-title.done-text { text-decoration: line-through; color: var(--text-muted); }
+        .task-desc { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 8px; }
+        .task-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; gap: 10px; flex-wrap: wrap; }
+        .status-badge { padding: 2px 10px; border-radius: 10px; font-size: 0.72rem; font-weight: 600; }
+        .status-pending { background: var(--surface-2); color: var(--text-secondary); }
+        .status-in-progress { background: #dbeafe; color: #1e40af; }
+        .status-done { background: #dcfce7; color: var(--success); }
+        .task-actions { display: flex; gap: 6px; margin-left: auto; }
+        .task-action-btn {
+            padding: 4px 10px; border-radius: 8px; border: 1px solid var(--border);
+            background: var(--surface); color: var(--text-muted); font-size: 0.72rem; cursor: pointer;
+            transition: all 0.12s; font-family: inherit;
+        }
+        .task-action-btn:hover { background: var(--surface-2); color: var(--text-primary); }
+        .task-action-btn.done-btn:hover { background: #dcfce7; color: var(--success); border-color: var(--success); }
+
+        /* ===== PROFILE ===== */
+        .profile-section {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px 22px;
+            margin-bottom: 14px;
+            box-shadow: var(--shadow);
+        }
+        .profile-section h3 { font-size: 0.88rem; font-weight: 700; color: var(--accent); margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+        .profile-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+        .profile-field label { display: block; font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+        .profile-field p { font-size: 0.9rem; color: var(--text-primary); font-weight: 500; }
+        .people-list { display: flex; flex-direction: column; gap: 10px; }
+        .person-card { display: flex; align-items: flex-start; gap: 10px; padding: 10px; background: var(--surface-2); border-radius: 10px; }
+        .person-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; }
+        .person-info { flex: 1; }
+        .person-name { font-weight: 600; font-size: 0.88rem; }
+        .person-context { font-size: 0.8rem; color: var(--text-secondary); }
+        .person-status { font-size: 0.72rem; color: var(--text-muted); margin-top: 2px; }
+
+        /* ===== ONBOARDING CARD ===== */
+        .onboarding-banner {
+            background: linear-gradient(135deg, var(--accent), #7c3aed);
+            color: white;
+            padding: 20px 24px;
+            border-radius: var(--radius);
+            margin-bottom: 20px;
+            display: flex; align-items: center; gap: 16px;
+        }
+        .onboarding-banner h3 { font-size: 1rem; margin-bottom: 4px; }
+        .onboarding-banner p { font-size: 0.85rem; opacity: 0.9; }
+        .onboarding-btn {
+            padding: 9px 18px; border-radius: 10px; border: 1.5px solid white;
+            background: transparent; color: white; font-weight: 600; font-size: 0.85rem;
+            cursor: pointer; white-space: nowrap; transition: all 0.15s; font-family: inherit;
+        }
+        .onboarding-btn:hover { background: white; color: var(--accent); }
+
+        /* ===== TYPING ===== */
+        .typing { color: var(--text-muted); font-style: italic; font-size: 0.85rem; padding: 8px 0; }
+
+        /* ===== SETTINGS ===== */
+        .settings-group {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            margin-bottom: 14px;
+            box-shadow: var(--shadow);
+        }
+        .settings-item {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 18px;
+            border-bottom: 1px solid var(--border);
+            gap: 16px;
+        }
+        .settings-item:last-child { border-bottom: none; }
+        .settings-item-label { font-size: 0.88rem; font-weight: 500; }
+        .settings-item-desc { font-size: 0.78rem; color: var(--text-muted); }
+
+        /* Toggle Switch */
+        .toggle { position: relative; display: inline-block; width: 44px; height: 24px; flex-shrink: 0; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; inset: 0; background: var(--border); border-radius: 24px; cursor: pointer; transition: 0.2s; }
+        .toggle-slider::before { content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
+        .toggle input:checked + .toggle-slider { background: var(--accent); }
+        .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+        /* ===== RESPONSIVE ===== */
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .layout { flex-direction: column; }
+            .stat-grid { grid-template-columns: 1fr 1fr; }
+            .page { padding: 20px 16px; }
+            .quick-actions { padding: 10px 16px; }
+            .input-area { padding: 12px 16px; }
+            .messages { padding: 16px; }
         }
     </style>
 </head>
 <body>
     <!-- TOP NAV -->
     <nav class="topnav">
-        <div class="nav-brand">
-            <span class="nav-logo">🧠</span>
+        <div class="nav-left">
+            <div class="nav-logo">🧠</div>
             <span class="nav-title">Cortex</span>
+            <span class="nav-status" id="navModeBadge">Demo</span>
         </div>
         <div class="nav-right">
-            <span class="nav-user" id="navUser">Loading...</span>
-            <button class="btn-signout" onclick="signOut()">Sign out</button>
+            <span class="nav-user" id="navUser"><strong>—</strong></span>
+            <button class="icon-btn" onclick="toggleTheme()" title="Toggle light/dark mode" id="themeBtn">🌙</button>
+            <button class="icon-btn btn-signout" onclick="signOut()">Sign out</button>
         </div>
     </nav>
 
@@ -184,79 +455,97 @@
         <!-- SIDEBAR -->
         <aside class="sidebar">
             <div class="sidebar-section">
-                <div class="sidebar-label">Menu</div>
+                <div class="sidebar-label">Workspace</div>
                 <div class="sidebar-link active" onclick="showPage('chat')" id="navChat">
                     💬 Chat
                 </div>
                 <div class="sidebar-link" onclick="showPage('memory')" id="navMemory">
                     🧠 Memory
+                    <span class="count-badge" id="memoryCount">0</span>
                 </div>
                 <div class="sidebar-link" onclick="showPage('tasks')" id="navTasks">
                     📋 Tasks
+                    <span class="count-badge" id="taskCount">0</span>
                 </div>
                 <div class="sidebar-link" onclick="showPage('profile')" id="navProfile">
                     👤 Profile
+                </div>
+                <div class="sidebar-link" onclick="showPage('settings')" id="navSettings">
+                    ⚙️ Settings
                 </div>
             </div>
             <div class="sidebar-section">
                 <div class="sidebar-label">Quick Actions</div>
                 <div class="sidebar-link" onclick="sendQuick('morning briefing')">☀️ Morning briefing</div>
-                <div class="sidebar-link" onclick="sendQuick('show my tasks')">📋 Show my tasks</div>
-                <div class="sidebar-link" onclick="sendQuick('what is in my memory?')">🧠 What do you remember?</div>
+                <div class="sidebar-link" onclick="sendQuick('what is on my plate today?')">📊 Today\'s priorities</div>
+                <div class="sidebar-link" onclick="sendQuick('add a task')">+ New task</div>
+                <div class="sidebar-link" onclick="sendQuick('remember that')">🧠 Store fact</div>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-label">Shortcuts</div>
+                <div class="sidebar-link" onclick="sendQuick('summarize last week')">📅 Last week summary</div>
+                <div class="sidebar-link" onclick="sendQuick('draft email to')">✏️ Draft email</div>
+                <div class="sidebar-link" onclick="sendQuick('schedule a call for tomorrow')">📅 Schedule call</div>
             </div>
         </aside>
 
         <!-- MAIN CONTENT -->
         <main class="main">
-            <!-- CHAT PAGE -->
+            <!-- ===== CHAT PAGE ===== -->
             <div class="page active" id="pageChat">
                 <div class="chat-container">
                     <div class="messages" id="messages">
-                        <div class="message cortex">Welcome back! I'm Cortex — your persistent productivity assistant. Your memory and tasks are loaded. What would you like to focus on today?</div>
+                        <div class="message cortex">Hey! I'm Cortex 🧠 — your persistent productivity chief of staff. I know your name, your projects, your team, and your tasks. What's on your plate today?</div>
                     </div>
                     <div class="quick-actions">
-                        <button class="quick-btn" onclick="sendQuick('What\'s on my plate today?')">☀️ Morning briefing</button>
-                        <button class="quick-btn" onclick="sendQuick('Add a task to follow up with my investor')">+ Add task</button>
-                        <button class="quick-btn" onclick="sendQuick('Draft an email to my design team')">✏️ Draft email</button>
-                        <button class="quick-btn" onclick="sendQuick('Schedule a call for tomorrow')">📅 Schedule call</button>
+                        <button class="quick-btn" onclick="sendQuick('Morning briefing')">☀️ Morning briefing</button>
+                        <button class="quick-btn" onclick="sendQuick('What are my top priorities?')">🎯 Top priorities</button>
+                        <button class="quick-btn" onclick="sendQuick('Add a task:')">+ New task</button>
+                        <button class="quick-btn" onclick="sendQuick('Draft a quick email to')">✏️ Draft email</button>
+                        <button class="quick-btn" onclick="sendQuick('Remember that')">🧠 Store fact</button>
+                        <button class="quick-btn" onclick="sendQuick('Summarize last week')">📅 Week summary</button>
                     </div>
                     <div class="input-area">
-                        <input type="text" id="msgInput" placeholder="Ask me anything... e.g. 'What\'s my priority right now?'" onkeydown="if(event.key==='Enter')sendMessage()">
+                        <input type="text" id="msgInput" placeholder="Ask anything — your tasks, memory, schedule, emails..." onkeydown="if(event.key==='Enter')sendMessage()">
                         <button class="send-btn" onclick="sendMessage()" id="sendBtn">Send</button>
                     </div>
                 </div>
             </div>
 
-            <!-- MEMORY PAGE -->
+            <!-- ===== MEMORY PAGE ===== -->
             <div class="page" id="pageMemory">
                 <div class="page-header">
                     <div class="page-title">🧠 Memory Model</div>
-                    <div class="page-desc">What Cortex knows about you — persists across every session</div>
+                    <div class="page-desc">Everything Cortex knows about you — loaded fresh every session</div>
                 </div>
                 <div class="memory-grid" id="memoryGrid">
-                    <div class="typing">Loading your memory...</div>
+                    <div class="typing">Loading memory...</div>
                 </div>
             </div>
 
-            <!-- TASKS PAGE -->
+            <!-- ===== TASKS PAGE ===== -->
             <div class="page" id="pageTasks">
                 <div class="page-header">
-                    <div class="page-title">📋 Your Tasks</div>
-                    <div class="page-desc">Prioritized automatically by urgency</div>
+                    <div class="page-title">📋 Tasks</div>
+                    <div class="page-desc">Prioritized by deadline and priority level</div>
                 </div>
                 <div class="task-list" id="taskList">
                     <div class="typing">Loading tasks...</div>
                 </div>
-                <div style="padding: 12px 24px;">
-                    <button class="quick-btn" onclick="showPage('chat'); sendQuick('Add a new task:')" style="border-color:#667eea;color:#667eea">+ Create new task</button>
-                </div>
             </div>
 
-            <!-- PROFILE PAGE -->
+            <!-- ===== PROFILE PAGE ===== -->
             <div class="page" id="pageProfile">
                 <div class="page-header">
-                    <div class="page-title">👤 Your Profile</div>
-                    <div class="page-desc">Your Cortex memory model — what I know about you</div>
+                    <div class="page-title">👤 Profile</div>
+                    <div class="page-desc">Your Cortex identity — what I know about you</div>
+                </div>
+                <div class="onboarding-banner" id="onboardingBanner" style="display:none;">
+                    <div style="flex:1;">
+                        <h3>Complete your profile</h3>
+                        <p>Tell me about yourself so I can give better briefings and remember your context</p>
+                    </div>
+                    <button class="onboarding-btn" onclick="showPage('chat'); sendQuick('I want to set up my profile')">Set up →</button>
                 </div>
                 <div class="profile-section">
                     <h3>👤 Personal Info</h3>
@@ -271,18 +560,103 @@
                 </div>
                 <div class="profile-section" id="profProject">
                     <h3>💼 Current Project</h3>
-                    <p id="profProjectText">-</p>
+                    <p id="profProjectText" style="font-size:0.9rem;color:var(--text-primary);">-</p>
                 </div>
                 <div class="profile-section" id="profPeople">
                     <h3>👥 Key People</h3>
-                    <div id="profPeopleList"></div>
+                    <div class="people-list" id="profPeopleList">
+                        <p style="color:var(--text-muted);font-size:0.88rem;">No key people yet. Say "remember that Alex Chen is my tech mentor" to add someone.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== SETTINGS PAGE ===== -->
+            <div class="page" id="pageSettings">
+                <div class="page-header">
+                    <div class="page-title">⚙️ Settings</div>
+                    <div class="page-desc">Customize how Cortex works for you</div>
+                </div>
+                <div class="settings-group">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">🌙 Dark Mode</div>
+                            <div class="settings-item-desc">Toggle between light and dark themes</div>
+                        </div>
+                        <label class="toggle">
+                            <input type="checkbox" id="darkModeToggle" onchange="applyTheme()">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">🔔 Briefing Style</div>
+                            <div class="settings-item-desc">How detailed should your morning briefing be?</div>
+                        </div>
+                        <select onchange="updateSetting('briefing_style', this.value)" id="briefingStyleSelect" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text-primary);font-family:inherit;font-size:0.85rem;">
+                            <option value="concise">Concise — key points only</option>
+                            <option value="balanced" selected>Balanced — good detail</option>
+                            <option value="detailed">Detailed — full breakdown</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">📅 Start of Week</div>
+                            <div class="settings-item-desc">Which day does your week start on?</div>
+                        </div>
+                        <select onchange="updateSetting('week_start', this.value)" id="weekStartSelect" style="padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text-primary);font-family:inherit;font-size:0.85rem;">
+                            <option value="monday">Monday</option>
+                            <option value="sunday">Sunday</option>
+                            <option value="saturday">Saturday</option>
+                        </select>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">🗑️ Clear Memory</div>
+                            <div class="settings-item-desc">Forget all stored facts and context</div>
+                        </div>
+                        <button class="task-action-btn" style="color:var(--danger);border-color:var(--danger);" onclick="clearMemory()">Clear all</button>
+                    </div>
+                </div>
+                <div class="settings-group">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">🔄 Re-sync Gmail</div>
+                            <div class="settings-item-desc">Pull latest emails from your Google account</div>
+                        </div>
+                        <button class="task-action-btn" onclick="resyncGmail()">Sync now</button>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">🔄 Re-sync Calendar</div>
+                            <div class="settings-item-desc">Refresh today's calendar events</div>
+                        </div>
+                        <button class="task-action-btn" onclick="resyncCalendar()">Sync now</button>
+                    </div>
+                </div>
+                <div class="settings-group">
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-item-label">🚪 Sign Out</div>
+                            <div class="settings-item-desc">Sign out of your Cortex session</div>
+                        </div>
+                        <button class="task-action-btn" style="color:var(--danger);border-color:var(--danger);" onclick="signOut()">Sign out</button>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
     <script>
-        // Firebase
+        // ============================================================
+        // STATE
+        // ============================================================
+        let idToken = null, userEmail = '', userName = '', userMode = 'demo';
+        let firebaseReady = false, sessionId = null;
+        let sessionToken = localStorage.getItem('cortex_token');
+
+        // ============================================================
+        // FIREBASE
+        // ============================================================
         const firebaseConfig = {
             apiKey: "YOUR_FIREBASE_API_KEY",
             authDomain: "YOUR_PROJECT.firebaseapp.com",
@@ -292,171 +666,208 @@
             appId: "YOUR_APP_ID"
         };
 
-        let auth, idToken = null, userEmail = '', userName = '';
-        let firebaseReady = false;
-        let sessionId = localStorage.getItem('cortex_session') || crypto.randomUUID();
-        localStorage.setItem('cortex_session', sessionId);
-
         try {
-            firebase.initializeApp(firebaseConfig, 'app');
-            auth = firebase.auth();
-            firebaseReady = firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('YOUR_');
-            if (!firebaseReady) { auth = null; }
-        } catch (e) {
-            console.warn('Firebase not configured. Running in demo mode.');
-            auth = null;
+            if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('YOUR_')) {
+                firebase.initializeApp(firebaseConfig, 'app');
+                firebaseReady = true;
+            }
+        } catch (e) {}
+
+        // ============================================================
+        // THEME
+        // ============================================================
+        function saveTheme(theme) {
+            localStorage.setItem('cortex_theme', theme);
+            document.documentElement.setAttribute('data-theme', theme);
+            document.getElementById('themeBtn').textContent = theme === 'dark' ? '☀️' : '🌙';
+            document.getElementById('darkModeToggle').checked = theme === 'dark';
         }
 
-        async function getAuthHeaders() {
-            // 1. Use existing idToken
-            if (idToken) return { 'Authorization': 'Bearer ' + idToken };
+        function toggleTheme() {
+            const current = document.documentElement.getAttribute('data-theme') || 'light';
+            saveTheme(current === 'dark' ? 'light' : 'dark');
+        }
 
-            // 2. Try localStorage first (set by login flow)
-            const stored = localStorage.getItem('cortex_token');
-            if (stored) {
-                idToken = stored;
-                return { 'Authorization': 'Bearer ' + stored };
+        function applyTheme() {
+            const dark = document.getElementById('darkModeToggle').checked;
+            saveTheme(dark ? 'dark' : 'light');
+        }
+
+        function loadTheme() {
+            const saved = localStorage.getItem('cortex_theme');
+            if (saved) {
+                document.documentElement.setAttribute('data-theme', saved);
+                document.getElementById('darkModeToggle').checked = saved === 'dark';
+                document.getElementById('themeBtn').textContent = saved === 'dark' ? '☀️' : '🌙';
+            } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                document.getElementById('darkModeToggle').checked = true;
+                document.getElementById('themeBtn').textContent = '☀️';
             }
+        }
 
-            // 3. Try URL param (?token=...)
+        // ============================================================
+        // AUTH HEADERS
+        // ============================================================
+        async function getAuthHeaders() {
+            if (idToken) return { 'Authorization': 'Bearer ' + idToken };
+            if (sessionToken) {
+                idToken = sessionToken;
+                return { 'Authorization': 'Bearer ' + sessionToken };
+            }
             const urlParams = new URLSearchParams(window.location.search);
             const urlToken = urlParams.get('token');
             if (urlToken) {
                 localStorage.setItem('cortex_token', urlToken);
+                sessionToken = urlToken;
                 idToken = urlToken;
-                // Clean URL
                 window.history.replaceState({}, '', window.location.pathname);
                 return { 'Authorization': 'Bearer ' + urlToken };
             }
-
-            // 4. Fallback to cookie (for Firebase OAuth redirects)
-            const cookies = document.cookie.split(';').reduce((acc, c) => {
-                const [k, v] = c.trim().split('=');
-                acc[k] = v;
-                return acc;
-            }, {});
-            if (cookies.cortex_token) {
-                idToken = cookies.cortex_token;
-                return { 'Authorization': 'Bearer ' + cookies.cortex_token };
-            }
-
             return {};
         }
 
+        // ============================================================
+        // INIT
+        // ============================================================
         async function init() {
-            if (firebaseReady && auth) {
-                auth.onAuthStateChanged(async (user) => {
-                    if (!user) { window.location.href = '/login'; return; }
-                    idToken = await user.getIdToken();
-                    userEmail = user.email;
-                    document.getElementById('navUser').innerHTML = user.email;
-                    loadUserData();
-                });
-            } else {
-                // Demo / token-based auth
-                const urlParams = new URLSearchParams(window.location.search);
-                const urlToken = urlParams.get('token');
-                const storedToken = localStorage.getItem('cortex_token');
+            loadTheme();
+            sessionId = localStorage.getItem('cortex_session') || crypto.randomUUID();
+            localStorage.setItem('cortex_session', sessionId);
 
-                if (urlToken) {
-                    localStorage.setItem('cortex_token', urlToken);
-                    idToken = urlToken;
-                    window.history.replaceState({}, '', window.location.pathname);
-                } else if (storedToken) {
-                    idToken = storedToken;
-                }
-
-                if (!idToken) {
-                    window.location.href = '/login';
-                    return;
-                }
-                document.getElementById('navUser').innerHTML = 'Demo mode — your data is isolated';
-                loadUserData();
+            // Check session
+            if (!sessionToken) {
+                window.location.href = '/login';
+                return;
             }
+
+            const headers = await getAuthHeaders();
+            const res = await fetch('/api/auth/me', { headers });
+            if (!res.ok) {
+                window.location.href = '/login';
+                return;
+            }
+
+            const user = await res.json();
+            userName = user.name || 'User';
+            userEmail = user.email || 'demo@example.com';
+            userMode = user.mode || 'demo';
+
+            document.getElementById('navUser').innerHTML = `<strong>${userName}</strong>`;
+            document.getElementById('navModeBadge').textContent = userMode === 'email' ? 'Active' : 'Demo';
+
+            // Profile data
+            document.getElementById('profName').textContent = userName;
+            document.getElementById('profEmail').textContent = userEmail;
+            document.getElementById('profStyle').textContent = (user.briefing_style || 'balanced').replace('_', ' ');
+            document.getElementById('profHours').textContent = user.working_hours || '9am – 6pm IST';
+
+            if (user.current_project && user.current_project.name) {
+                document.getElementById('profProjectText').textContent = `${user.current_project.name} — ${user.current_project.stage || 'active'}`;
+            } else {
+                document.getElementById('profProject').style.display = 'none';
+            }
+
+            if (user.people && user.people.length > 0) {
+                document.getElementById('profPeopleList').innerHTML = user.people.map(p => `
+                    <div class="person-card">
+                        <div class="person-avatar">${p.name.charAt(0)}</div>
+                        <div class="person-info">
+                            <div class="person-name">${p.name}</div>
+                            <div class="person-context">${p.context}</div>
+                            <div class="person-status">${p.status}</div>
+                        </div>
+                    </div>`).join('');
+            }
+
+            if (user.briefing_style) {
+                document.getElementById('briefingStyleSelect').value = user.briefing_style;
+            }
+
+            await Promise.all([loadMemory(), loadTasks()]);
         }
 
-        async function loadDemoData() {
-            // Demo mode — load the pre-seeded data
-            document.getElementById('navUser').innerHTML = 'Demo mode';
-            await loadMemory();
-            await loadTasks();
-        }
-
-        async function loadUserData() {
-            // Load profile
-            try {
-                const res = await fetch('/api/auth/me', { headers: await getAuthHeaders() });
-                if (res.ok) {
-                    const data = await res.json();
-                    document.getElementById('profName').textContent = data.name || '-';
-                    document.getElementById('profEmail').textContent = data.email || '-';
-                    document.getElementById('profStyle').textContent = data.briefing_style || '-';
-                    document.getElementById('profHours').textContent = data.working_hours || '-';
-                    if (data.current_project) {
-                        document.getElementById('profProjectText').textContent =
-                            (data.current_project.name || '-') + ' — ' + data.current_project.stage;
-                    }
-                    const people = data.people || [];
-                    document.getElementById('profPeopleList').innerHTML = people.length
-                        ? people.map(p => `<p style="margin-bottom:8px;font-size:0.9rem">• <strong>${p.name}</strong>: ${p.context} <span style="color:#6b7280">(${p.status})</span></p>`).join('')
-                        : '<p style="color:#6b7280;font-size:0.9rem">No key people added yet</p>';
-                }
-            } catch (e) { console.error(e); }
-
-            await loadMemory();
-            await loadTasks();
-        }
-
+        // ============================================================
+        // MEMORY
+        // ============================================================
         async function loadMemory() {
             try {
                 const res = await fetch('/api/memory', { headers: await getAuthHeaders() });
                 const data = await res.json();
                 const grid = document.getElementById('memoryGrid');
-                if (!data.memory || data.memory.length === 0) {
-                    grid.innerHTML = '<div class="memory-card"><div class="memory-value">No memory entries yet. Start chatting with Cortex!</div></div>';
+                const count = data.memory ? data.memory.length : 0;
+                document.getElementById('memoryCount').textContent = count;
+
+                if (!data.memory || count === 0) {
+                    grid.innerHTML = '<div class="memory-card"><div class="memory-value" style="color:var(--text-muted);font-style:italic;">Nothing stored yet. Say "remember that..." or "note that..." to teach Cortex something about you.</div></div>';
                     return;
                 }
                 grid.innerHTML = data.memory.map(m => `
                     <div class="memory-card">
-                        <div class="memory-key">${m.key}</div>
+                        <div class="memory-key">
+                            ${m.key.replace(/_/g, ' ')}
+                            <span class="confidence">${Math.round((m.confidence || 0.9) * 100)}%</span>
+                        </div>
                         <div class="memory-value">${typeof m.value === 'string' ? m.value : JSON.stringify(m.value, null, 2)}</div>
                         <div class="memory-meta">
-                            <span class="confidence">${Math.round(m.confidence * 100)}%</span>
-                            <span class="badge badge-${m.source}">${m.source}</span>
+                            <span class="badge badge-${m.source || 'chat'}">${m.source || 'chat'}</span>
+                            ${m.updated_at ? `<span>Updated ${new Date(m.updated_at).toLocaleDateString()}</span>` : ''}
                         </div>
                     </div>`).join('');
             } catch (e) {
-                document.getElementById('memoryGrid').innerHTML = '<div class="memory-card"><div class="memory-value">Error loading memory</div></div>';
+                document.getElementById('memoryGrid').innerHTML = '<div class="memory-card"><div class="memory-value" style="color:var(--danger);">Failed to load memory.</div></div>';
             }
         }
 
+        // ============================================================
+        // TASKS
+        // ============================================================
         async function loadTasks() {
             try {
                 const res = await fetch('/api/tasks', { headers: await getAuthHeaders() });
                 const data = await res.json();
                 const list = document.getElementById('taskList');
+                const count = data.tasks ? data.tasks.filter(t => t.status !== 'done').length : 0;
+                document.getElementById('taskCount').textContent = count;
+
                 if (!data.tasks || data.tasks.length === 0) {
-                    list.innerHTML = '<div class="task-item"><div class="task-content"><div class="task-desc">No tasks yet. Say "add a task" to create one!</div></div></div>';
+                    list.innerHTML = '<div class="task-item"><div class="task-content"><div class="task-desc" style="color:var(--text-muted);font-style:italic;">No tasks yet. Say "add a task" to create one.</div></div></div>';
                     return;
                 }
                 list.innerHTML = data.tasks.map(t => `
-                    <div class="task-item">
-                        <div class="priority-dot priority-${t.priority}"></div>
+                    <div class="task-item ${t.status === 'done' ? 'done' : ''}">
+                        <div class="priority-dot priority-${t.priority || 'medium'}"></div>
                         <div class="task-content">
-                            <div class="task-title">${t.title}</div>
+                            <div class="task-title ${t.status === 'done' ? 'done-text' : ''}">${t.title}</div>
                             ${t.description ? `<div class="task-desc">${t.description}</div>` : ''}
                             <div class="task-meta">
-                                <span class="status-badge status-${t.status}">${t.status.replace('_',' ')}</span>
-                                <span>🔴 ${t.priority}</span>
-                                ${t.deadline ? `<span>📅 ${new Date(t.deadline).toLocaleDateString()}</span>` : ''}
+                                <span class="status-badge status-${t.status || 'pending'}">${(t.status || 'pending').replace('_', ' ')}</span>
+                                <span>🔴 ${t.priority || 'medium'}</span>
+                                ${t.deadline ? `<span>📅 ${new Date(t.deadline).toLocaleDateString('en-IN', {day:'numeric',month:'short'})}</span>` : ''}
                             </div>
+                        </div>
+                        <div class="task-actions">
+                            ${t.status !== 'done' ? `<button class="task-action-btn done-btn" onclick="completeTask('${t.id}')">✓ Done</button>` : ''}
                         </div>
                     </div>`).join('');
             } catch (e) {
-                document.getElementById('taskList').innerHTML = '<div class="task-item"><div class="task-content"><div class="task-desc">Error loading tasks</div></div></div>';
+                document.getElementById('taskList').innerHTML = '<div class="task-item"><div class="task-content"><div class="task-desc" style="color:var(--danger);">Failed to load tasks.</div></div></div>';
             }
         }
 
+        async function completeTask(taskId) {
+            try {
+                await fetch('/api/tasks/' + taskId + '/complete', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) }
+                });
+                loadTasks();
+            } catch (e) {}
+        }
+
+        // ============================================================
+        // CHAT
+        // ============================================================
         async function sendMessage() {
             const input = document.getElementById('msgInput');
             const btn = document.getElementById('sendBtn');
@@ -482,19 +893,18 @@
                 });
                 const data = await res.json();
                 typing.remove();
+
                 if (data.response) {
                     addMessage(data.response, 'cortex');
-                    // Refresh memory if it changed
-                    if (msg.toLowerCase().includes('remember') || msg.toLowerCase().includes('store') || msg.toLowerCase().includes('note')) {
-                        loadMemory();
-                    }
-                    if (msg.toLowerCase().includes('task')) loadTasks();
+                    if (/\b(remember|store|note that|keep in mind)\b/i.test(msg)) loadMemory();
+                    if (/\b(task|todo|add|create)\b/i.test(msg)) loadTasks();
+                    if (/\b(priority|schedule|briefing|today)\b/i.test(msg)) loadTasks();
                 } else {
-                    addMessage('Error: ' + (data.error || 'Something went wrong'), 'cortex');
+                    addMessage('Something went wrong: ' + (data.error || 'Unknown error'), 'cortex');
                 }
             } catch (e) {
                 typing.remove();
-                addMessage('Connection error. Is the server running?', 'cortex');
+                addMessage('Connection error. Please check your internet.', 'cortex');
             }
 
             btn.disabled = false;
@@ -504,7 +914,7 @@
         function sendQuick(msg) {
             document.getElementById('msgInput').value = msg;
             showPage('chat');
-            sendMessage();
+            setTimeout(sendMessage, 100);
         }
 
         function addMessage(text, role) {
@@ -520,31 +930,85 @@
             m.scrollTop = m.scrollHeight;
         }
 
+        // ============================================================
+        // PAGES
+        // ============================================================
         function showPage(name) {
             document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
             document.getElementById('page' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
             document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
-            document.getElementById('nav' + name.charAt(0).toUpperCase() + name.slice(1)).classList.add('active');
+            const navEl = document.getElementById('nav' + name.charAt(0).toUpperCase() + name.slice(1));
+            if (navEl) navEl.classList.add('active');
             if (name === 'memory') loadMemory();
             if (name === 'tasks') loadTasks();
-            if (name === 'profile' && auth) loadUserData();
         }
 
-        async function signOut() {
-            const confirmed = confirm('Are you sure you want to sign out of Cortex?\n\nYour data will remain saved for when you sign back in.');
-            if (!confirmed) return;
+        // ============================================================
+        // SETTINGS ACTIONS
+        // ============================================================
+        async function updateSetting(key, value) {
+            try {
+                await fetch('/api/profile', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) },
+                    body: JSON.stringify({ [key]: value })
+                });
+            } catch (e) {}
+        }
 
-            localStorage.removeItem('cortex_token');
-            localStorage.removeItem('cortex_mode');
-            localStorage.removeItem('cortex_user_email');
-            localStorage.removeItem('cortex_user_name');
+        async function clearMemory() {
+            if (!confirm('This will clear all your stored memory. This cannot be undone. Continue?')) return;
+            try {
+                await fetch('/api/memory', { method: 'DELETE', headers: await getAuthHeaders() });
+                loadMemory();
+            } catch (e) {}
+        }
 
-            if (firebaseReady && auth) {
-                await auth.signOut();
+        async function resyncGmail() {
+            addMessage('Re-syncing Gmail...', 'cortex');
+            try {
+                const res = await fetch('/api/email/sync', { headers: await getAuthHeaders() });
+                const data = await res.json();
+                addMessage('Gmail sync complete. ' + (data.count || 0) + ' emails loaded.', 'cortex');
+            } catch (e) {
+                addMessage('Gmail sync failed. Make sure Google sign-in is connected.', 'cortex');
             }
+        }
 
+        async function resyncCalendar() {
+            addMessage('Re-syncing Calendar...', 'cortex');
+            try {
+                const res = await fetch('/api/calendar/today', { headers: await getAuthHeaders() });
+                const data = await res.json();
+                addMessage('Calendar sync complete. ' + (data.events ? data.events.length : 0) + ' events today.', 'cortex');
+            } catch (e) {
+                addMessage('Calendar sync failed.', 'cortex');
+            }
+        }
+
+        // ============================================================
+        // SIGN OUT
+        // ============================================================
+        async function signOut() {
+            if (!confirm('Sign out of Cortex?')) return;
+            localStorage.removeItem('cortex_token');
+            localStorage.removeItem('cortex_session');
+            if (firebaseReady) {
+                try { firebase.auth().signOut(); } catch (e) {}
+            }
             window.location.href = '/login';
         }
+
+        // ============================================================
+        // SHORTCUTS: Ctrl+K to focus chat
+        // ============================================================
+        document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                showPage('chat');
+                document.getElementById('msgInput').focus();
+            }
+        });
 
         init();
     </script>

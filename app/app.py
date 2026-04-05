@@ -10,6 +10,7 @@ import os
 import json
 import uuid
 import hashlib
+import hmac
 import time
 import base64
 from datetime import datetime, timedelta
@@ -22,7 +23,7 @@ app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = os.getenv('SECRET_KEY', os.urandom(32))
 CORS(app)
 
-DEMO_MODE = os.getenv('DEMO_MODE', 'true').lower() == 'true'
+DEMO_MODE = os.getenv('DEMO_MODE', '').lower() not in ('false', '0', 'no', 'off')
 
 # =============================================================================
 # FIREBASE INITIALIZATION
@@ -31,13 +32,20 @@ DEMO_MODE = os.getenv('DEMO_MODE', 'true').lower() == 'true'
 firebase_initialized = False
 try:
     from app import firebase_auth as fb
-    if fb.init_firebase():
-        firebase_initialized = True
-        print("[App] Firebase Admin initialized successfully")
+    if fb and fb._use_firebase:
+        if fb.init_firebase():
+            firebase_initialized = True
+            print("[App] Firebase Admin initialized successfully")
+        else:
+            print("[App] Firebase not initialized — demo + email/password mode")
     else:
-        print("[App] Firebase not initialized — set GOOGLE_APPLICATION_CREDENTIALS env var")
+        print("[App] Firebase credentials not found — demo + email/password mode")
+        fb = None
 except ImportError:
-    print("[App] firebase_auth module not found — Firebase disabled")
+    print("[App] firebase_auth module not found — demo + email/password mode")
+    fb = None
+except Exception as e:
+    print(f"[App] Firebase init error: {e} — demo + email/password mode")
     fb = None
 
 # =============================================================================
@@ -47,7 +55,34 @@ except ImportError:
 _sessions = {}  # token -> {user_id, email, name, created_at, firebase_uid}
 _users_cache = {}  # user_id -> full user data (merged from memory + Firebase)
 
+# =============================================================================
+# SIMPLE EMAIL/PASSWORD AUTH
+# =============================================================================
+
+# In-memory user accounts: email -> {password_hash, uid, name}
+_user_accounts = {}
+
 DEMO_TOKEN = None
+
+
+def hash_password(password, salt=None):
+    """Hash a password with salt."""
+    import hmac
+    if salt is None:
+        salt = os.urandom(16)
+    hashed = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000)
+    return salt.hex() + ':' + hashed.hex()
+
+
+def verify_password(password, stored):
+    """Verify a password against its hash."""
+    try:
+        salt_hex, hash_hex = stored.split(':')
+        salt = bytes.fromhex(salt_hex)
+        expected = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 100000).hex()
+        return hmac.compare_digest(expected, hash_hex)
+    except:
+        return False
 
 
 def create_session_token():
@@ -213,54 +248,62 @@ def dashboard_page():
 def create_session():
     """
     Create a session. Supports:
-    1. Firebase ID token (real Google OAuth via Firebase)
-    2. Demo token (no auth needed)
-    3. Email/password (when Firebase is configured)
+    1. Email + password login (always works)
+    2. Demo mode (no auth needed)
     """
     global _users_cache
 
     data = request.get_json() or {}
-    id_token = data.get('id_token')
-    email = data.get('email')
-    password = data.get('password')
+    email = (data.get('email') or '').strip().lower()
+    password = data.get('password') or ''
 
     # -------------------------------------------------------------------------
-    # PATH 1: Firebase Auth (when Firebase is initialized)
+    # PATH 1: Email + Password Login (always works)
     # -------------------------------------------------------------------------
-    if id_token and firebase_initialized and fb:
-        firebase_user = fb.verify_firebase_token(id_token)
-        if firebase_user:
-            uid = firebase_user['uid']
-            user_email = firebase_user.get('email', '')
-            user_name = firebase_user.get('name', user_email.split('@')[0])
+    if email and password:
+        if email not in _user_accounts:
+            return jsonify({'error': 'No account found with this email. Sign up first.'}), 401
 
-            # Get or create session
-            token = create_session_token()
-            _sessions[token] = {
-                'user_id': uid,
-                'email': user_email,
-                'name': user_name,
-                'firebase_uid': uid,
-                'created_at': time.time(),
-                'onboarding_complete': True,  # Firebase users auto-onboard
-                'source': 'firebase',
+        account = _user_accounts[email]
+        if not verify_password(password, account['password_hash']):
+            return jsonify({'error': 'Incorrect password. Try again.'}), 401
+
+        uid = account['uid']
+        name = account['name']
+
+        # Get or create session
+        token = create_session_token()
+        _sessions[token] = {
+            'user_id': uid,
+            'email': email,
+            'name': name,
+            'created_at': time.time(),
+            'onboarding_complete': True,
+            'source': 'email',
+        }
+
+        # Ensure user data exists
+        if uid not in _users_cache:
+            _users_cache[uid] = {
+                'profile': {'name': name, 'email': email, 'briefing_style': 'balanced'},
+                'memory': {},
+                'tasks': [],
+                'cal_events': [],
+                'email_results': [],
+                'google_data': None,
             }
 
-            # Try to get existing user data from Firestore
-            existing_data = fb.get_user_firestore_data(uid)
-
-            resp = jsonify({
-                'token': token,
-                'user': {'email': user_email, 'name': user_name},
-                'needs_onboarding': False,
-                'mode': 'firebase',
-                'has_google_data': existing_data.get('google_data') is not None if existing_data else False,
-            })
-            resp.set_cookie('cortex_token', token, httponly=True, samesite='Lax', max_age=86400 * 30)
-            return resp
+        resp = jsonify({
+            'token': token,
+            'user': {'email': email, 'name': name},
+            'needs_onboarding': False,
+            'mode': 'email',
+        })
+        resp.set_cookie('cortex_token', token, httponly=True, samesite='Lax', max_age=86400 * 30)
+        return resp
 
     # -------------------------------------------------------------------------
-    # PATH 2: Demo mode (no Firebase needed)
+    # PATH 2: Demo mode (no credentials)
     # -------------------------------------------------------------------------
     if DEMO_MODE:
         token = get_or_create_demo_user()
@@ -274,40 +317,7 @@ def create_session():
         resp.set_cookie('cortex_token', token, httponly=True, samesite='Lax', max_age=86400 * 30)
         return resp
 
-    # -------------------------------------------------------------------------
-    # PATH 3: Email/password (when Firebase is configured but no ID token)
-    # -------------------------------------------------------------------------
-    if email and password and firebase_initialized and fb:
-        try:
-            user = fb.auth.get_user_by_email(email)
-            uid = user.uid
-            user_name = user.display_name or email.split('@')[0]
-
-            # Verify password (Firebase Admin doesn't support password verification directly
-            # we'd need to use client-side SDK or a custom token approach)
-            token = create_session_token()
-            _sessions[token] = {
-                'user_id': uid,
-                'email': email,
-                'name': user_name,
-                'firebase_uid': uid,
-                'created_at': time.time(),
-                'onboarding_complete': True,
-                'source': 'firebase_email',
-            }
-
-            resp = jsonify({
-                'token': token,
-                'user': {'email': email, 'name': user_name},
-                'needs_onboarding': False,
-                'mode': 'firebase',
-            })
-            resp.set_cookie('cortex_token', token, httponly=True, samesite='Lax', max_age=86400 * 30)
-            return resp
-        except Exception as e:
-            return jsonify({'error': f'Authentication failed: {e}'}), 401
-
-    return jsonify({'error': 'Authentication not configured. Use demo mode.'}), 400
+    return jsonify({'error': 'Email and password are required'}), 400
 
 
 @app.route('/api/auth/demo', methods=['POST'])
@@ -323,6 +333,75 @@ def create_demo_session():
     })
     resp.set_cookie('cortex_token', token, httponly=True, samesite='Lax', max_age=86400 * 30)
     return resp
+
+
+@app.route('/api/auth/register', methods=['POST'])
+def register_user():
+    """Register a new user with email and password. Creates account and auto-logs in."""
+    print(f"[REGISTER] Called — DEMO_MODE={DEMO_MODE}, firebase={firebase_initialized}")
+    print(f"[REGISTER] _user_accounts type: {type(_user_accounts)}, len: {len(_user_accounts)}")
+    print(f"[REGISTER] _sessions type: {type(_sessions)}, len: {len(_sessions)}")
+    try:
+        global _users_cache
+
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip().lower()
+        password = data.get('password') or ''
+        name = (data.get('name') or '').strip() or email.split('@')[0]
+
+        print(f"[REGISTER] email={email}, name={name}")
+
+        if not email or '@' not in email:
+            return jsonify({'error': 'Please enter a valid email address'}), 400
+        if len(password) < 6:
+            return jsonify({'error': 'Password must be at least 6 characters'}), 400
+        if email in _user_accounts:
+            return jsonify({'error': 'An account with this email already exists'}), 409
+
+        uid = hashlib.sha256(email.encode()).hexdigest()[:16]
+        password_hash = hash_password(password)
+        _user_accounts[email] = {
+            'password_hash': password_hash,
+            'uid': uid,
+            'name': name,
+            'created_at': time.time(),
+        }
+
+        _users_cache[uid] = {
+            'profile': {'name': name, 'email': email, 'briefing_style': 'balanced'},
+            'memory': {},
+            'tasks': [],
+            'cal_events': [],
+            'email_results': [],
+            'google_data': None,
+        }
+
+        token = create_session_token()
+        _sessions[token] = {
+            'user_id': uid,
+            'email': email,
+            'name': name,
+            'created_at': time.time(),
+            'onboarding_complete': True,
+            'source': 'email',
+        }
+
+        print(f"[REGISTER] Success: uid={uid}, sessions={len(_sessions)}")
+
+        resp = jsonify({
+            'token': token,
+            'user': {'email': email, 'name': name},
+            'needs_onboarding': False,
+            'mode': 'email',
+        })
+        resp.set_cookie('cortex_token', token, httponly=True, samesite='Lax', max_age=86400 * 30)
+        return resp, 201
+
+    except Exception as e:
+        import traceback
+        print(f"[REGISTER] ERROR: {e}")
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/auth/me', methods=['GET'])
@@ -657,6 +736,13 @@ def api_email_draft():
 
 @app.route('/api/health', methods=['GET'])
 def health():
+    return jsonify({
+        'DEMO_MODE': DEMO_MODE,
+        'firebase_initialized': firebase_initialized,
+        'user_accounts_count': len(_user_accounts),
+        '_users_cache_count': len(_users_cache),
+        'sessions_count': len(_sessions),
+    })
     return jsonify({
         'status': 'healthy',
         'agent': 'cortex',

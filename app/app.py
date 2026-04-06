@@ -136,6 +136,9 @@ def _save_session(token, user_id, email, name, created_at, onboarding_complete, 
         print(f"[UserDB] Error saving session: {e}")
 
 
+# In-memory user accounts storage
+_user_accounts = {}
+
 # Load existing accounts on startup (gracefully skip if DB fails)
 try:
     _load_user_accounts()
@@ -973,19 +976,14 @@ def api_email_draft():
 @app.route('/api/health', methods=['GET'])
 def health():
     return jsonify({
-        'DEMO_MODE': DEMO_MODE,
-        'firebase_initialized': firebase_initialized,
-        'user_accounts_count': len(_user_accounts),
-        '_users_cache_count': len(_users_cache),
-        'sessions_count': len(_sessions),
-    })
-    return jsonify({
         'status': 'healthy',
         'agent': 'cortex',
         'mode': 'demo' if DEMO_MODE else 'production',
         'firebase': firebase_initialized,
         'multi_user': True,
         'auto_pull': 'gmail_calendar' if firebase_initialized else 'demo_mode',
+        'user_accounts_count': len(_user_accounts),
+        'sessions_count': len(_sessions),
         'timestamp': datetime.now().isoformat()
     })
 

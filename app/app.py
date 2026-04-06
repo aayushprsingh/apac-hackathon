@@ -32,14 +32,14 @@ DEMO_MODE = os.getenv('DEMO_MODE', '').lower() not in ('false', '0', 'no', 'off'
 firebase_initialized = False
 try:
     from app import firebase_auth as fb
-    if fb and fb._use_firebase:
+    if hasattr(fb, '_use_firebase') and fb._use_firebase and hasattr(fb, 'init_firebase'):
         if fb.init_firebase():
             firebase_initialized = True
             print("[App] Firebase Admin initialized successfully")
         else:
             print("[App] Firebase not initialized — demo + email/password mode")
     else:
-        print("[App] Firebase credentials not found — demo + email/password mode")
+        print("[App] Firebase disabled — demo + email/password mode")
         fb = None
 except ImportError:
     print("[App] firebase_auth module not found — demo + email/password mode")
@@ -51,11 +51,17 @@ except Exception as e:
 # =============================================================================
 # PERSISTENT STORAGE — SQLite for user accounts + sessions ( survives restarts)
 # =============================================================================
+# PERSISTENT STORAGE — SQLite for user accounts + sessions ( survives restarts)
+# =============================================================================
 import sqlite3
 import os
 
-DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
-os.makedirs(DATA_DIR, exist_ok=True)
+# Use /tmp on Cloud Run, local data/ for local development
+if os.getenv('K_SERVICE'):  # Cloud Run environment
+    DATA_DIR = '/tmp'
+else:
+    DATA_DIR = os.path.join(os.path.dirname(__file__), '..', 'data')
+    os.makedirs(DATA_DIR, exist_ok=True)
 USER_DB = os.path.join(DATA_DIR, 'cortex_users.db')
 
 def _get_user_db():
@@ -130,8 +136,11 @@ def _save_session(token, user_id, email, name, created_at, onboarding_complete, 
         print(f"[UserDB] Error saving session: {e}")
 
 
-# Load existing accounts on startup
-_load_user_accounts()
+# Load existing accounts on startup (gracefully skip if DB fails)
+try:
+    _load_user_accounts()
+except Exception as e:
+    print(f"[UserDB] Could not load accounts: {e}")
 
 
 # =============================================================================
@@ -141,7 +150,7 @@ _load_user_accounts()
 _sessions = {}  # token -> {user_id, email, name, created_at, firebase_uid}
 _users_cache = {}  # user_id -> full user data (merged from memory + Firebase)
 
-# Load sessions from SQLite on startup
+# Load sessions from SQLite on startup (gracefully skip if DB fails)
 try:
     conn = _get_user_db()
     rows = conn.execute('SELECT token, user_id, email, name, created_at, onboarding_complete, source FROM sessions').fetchall()
@@ -156,7 +165,7 @@ try:
             'source': row[6],
         }
 except Exception as e:
-    print(f"[UserDB] Error loading sessions: {e}")
+    print(f"[UserDB] Could not load sessions: {e}")
 
 
 # =============================================================================
@@ -317,6 +326,9 @@ def require_auth(f):
 
 @app.route('/')
 def index():
+    # In demo mode, skip straight to onboarding
+    if DEMO_MODE:
+        return redirect('/onboarding')
     user = get_current_user()
     if user and user.get('onboarding_complete'):
         return redirect('/dashboard')

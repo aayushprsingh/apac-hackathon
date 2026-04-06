@@ -14,4 +14,5 @@ To enable Firebase:
 # Firebase is disabled by default for zero-config deployment.
 # Enable by providing service account credentials as described above.
 firebase_initialized = False
+_use_firebase = False  # Flag to check if Firebase should be used
 fb = None

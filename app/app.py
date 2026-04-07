@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import time
 import base64
+import importlib
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -414,7 +415,10 @@ def ensure_google_user_account(user_info):
 
 
 def get_google_oauth_module():
-    return __import__('app.google_oauth', fromlist=['*'])
+    try:
+        return importlib.import_module('app.google_oauth')
+    except ModuleNotFoundError:
+        return importlib.import_module('google_oauth')
 
 
 def sync_google_data_for_user(uid, tokens):

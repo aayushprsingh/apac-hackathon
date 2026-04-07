@@ -125,7 +125,7 @@
         <header>
             <div class="logo">🧠</div>
             <h1>Set up your Cortex</h1>
-            <p class="subtitle">Tell Cortex a bit about yourself — it builds a memory model from this</p>
+            <p class="subtitle">Tell Cortex about yourself — it remembers your context, tasks, and goals. Works for students, founders, creators, and professionals alike.</p>
         </header>
 
         <div class="progress">
@@ -145,8 +145,8 @@
             <label>Your name *</label>
             <input type="text" id="userName" placeholder="e.g. Priya Sharma">
 
-            <label>Your email (auto-detected)</label>
-            <input type="email" id="userEmail" placeholder="Detected from your Google account" readonly>
+            <label>Your email</label>
+            <input type="email" id="userEmail" placeholder="you@example.com">
 
             <label>How you want Cortex to address you</label>
             <input type="text" id="preferredName" placeholder="e.g. Priya">
@@ -210,7 +210,7 @@
                     <span id="finishSpinner" class="spinner" style="display:none;"></span>
                 </button>
             </div>
-            <span class="skip-link" onclick="finishOnboarding()">Skip — I'll configure later</span>
+            <span class="skip-link" onclick="window.location.href='/dashboard'">Skip — I'll configure later →</span>
         </div>
 
         <p class="logged-in-as" id="loggedInAs"></p>
@@ -275,7 +275,7 @@
                 }
                 document.getElementById('userEmail').value = 'demo@example.com';
                 document.getElementById('userEmail').placeholder = 'demo@example.com';
-                document.getElementById('loggedInAs').innerHTML = 'Demo mode — <strong>your data is private</strong>';
+                document.getElementById('loggedInAs').innerHTML = 'Guest mode — your data stays private and is only stored on this device';
             }
         }
 

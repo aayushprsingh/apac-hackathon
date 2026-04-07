@@ -572,6 +572,34 @@
 
             <!-- ===== SETTINGS PAGE ===== -->
             <div class="page" id="pageSettings">
+                <!-- Google Connection Card -->
+                <div class="profile-section" id="googleConnectionCard" style="border-left: 3px solid var(--warning); margin-bottom: 14px;">
+                    <h3 style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:1.1rem;">🔗</span>
+                        Google Account
+                        <span class="badge" id="googleStatusBadge" style="background:var(--warning);color:white;">Not Connected</span>
+                    </h3>
+                    <p style="font-size:0.85rem; color:var(--text-secondary); margin: 8px 0 14px; line-height:1.5;">
+                        Connect your Google account to let Cortex automatically pull your emails and calendar events for personalized briefings. Your data is never shared with third parties.
+                    </p>
+                    <div id="googleUserInfo" style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:12px; display:none;">
+                        Connected as: <strong id="googleConnectedEmail" style="color:var(--text-primary);"></strong>
+                    </div>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button class="task-action-btn" id="connectGoogleBtn" onclick="connectGoogle()" style="background:var(--accent); color:white; border-color:var(--accent); font-weight:600;">
+                            🔗 Connect Gmail &amp; Calendar
+                        </button>
+                        <button class="task-action-btn" id="pullGoogleDataBtn" onclick="pullGoogleData()" style="display:none; background:#dcfce7; color:#166534; border-color:#86efac;" title="Pull latest emails and calendar events">
+                            ↻ Pull Gmail &amp; Calendar
+                        </button>
+                        <button class="task-action-btn" id="disconnectGoogleBtn" onclick="disconnectGoogle()" style="display:none; color:var(--danger); border-color:var(--danger);">
+                            Disconnect
+                        </button>
+                    </div>
+                    <div id="googleOAuthNote" style="font-size:0.78rem; color:var(--text-muted); margin-top:10px; font-style:italic;">
+                        Note: For production use, set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI environment variables.
+                    </div>
+                </div>
                 <div class="page-header">
                     <div class="page-title">⚙️ Settings</div>
                     <div class="page-desc">Customize how Cortex works for you</div>
@@ -730,6 +758,95 @@
         // ============================================================
         // INIT
         // ============================================================
+        // ============================================================
+        // GOOGLE OAUTH STATUS
+        // ============================================================
+        async function checkGoogleStatus() {
+            try {
+                const res = await fetch('/api/auth/google/status', { headers: await getAuthHeaders() });
+                const data = await res.json();
+                updateGoogleUI(data);
+            } catch (e) {
+                console.warn('Could not check Google status:', e);
+            }
+        }
+
+        function updateGoogleUI(data) {
+            const statusBadge = document.getElementById('googleStatusBadge');
+            const userInfo = document.getElementById('googleUserInfo');
+            const connectBtn = document.getElementById('connectGoogleBtn');
+            const pullBtn = document.getElementById('pullGoogleDataBtn');
+            const disconnectBtn = document.getElementById('disconnectGoogleBtn');
+            const connectedEmail = document.getElementById('googleConnectedEmail');
+            const oauthNote = document.getElementById('googleOAuthNote');
+
+            if (data.configured === false) {
+                statusBadge.textContent = 'Not Configured';
+                statusBadge.style.background = 'var(--text-muted)';
+                connectBtn.disabled = true;
+                connectBtn.title = 'Google OAuth not configured on server';
+                oauthNote.style.display = 'block';
+                return;
+            }
+
+            oauthNote.style.display = 'none';
+
+            if (data.connected) {
+                statusBadge.textContent = 'Connected';
+                statusBadge.style.background = 'var(--success)';
+                userInfo.style.display = 'block';
+                connectedEmail.textContent = data.email || userEmail;
+                connectBtn.style.display = 'none';
+                pullBtn.style.display = 'inline-flex';
+                disconnectBtn.style.display = 'inline-flex';
+            } else {
+                statusBadge.textContent = 'Not Connected';
+                statusBadge.style.background = 'var(--warning)';
+                userInfo.style.display = 'none';
+                connectBtn.style.display = 'inline-flex';
+                pullBtn.style.display = 'none';
+                disconnectBtn.style.display = 'none';
+            }
+        }
+
+        async function connectGoogle() {
+            // Redirect to Google OAuth consent
+            window.location.href = '/api/auth/google/connect';
+        }
+
+        async function pullGoogleData() {
+            const pullBtn = document.getElementById('pullGoogleDataBtn');
+            pullBtn.disabled = true;
+            pullBtn.textContent = 'Pulling...';
+            addMessage('Pulling your Gmail and Calendar data...', 'cortex');
+            try {
+                const res = await fetch('/api/auth/google/pull', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) }
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    addMessage(`✅ Gmail & Calendar connected! Pulled ${data.emails_pulled} emails and ${data.events_pulled} calendar events. Your briefing will now include real data.`, 'cortex');
+                    loadMemory();
+                    loadTasks();
+                } else {
+                    addMessage('⚠️ Pull failed: ' + (data.error || 'Unknown error'), 'cortex');
+                }
+            } catch (e) {
+                addMessage('⚠️ Connection error. Please try again.', 'cortex');
+            }
+            pullBtn.disabled = false;
+            pullBtn.textContent = '↻ Pull Gmail & Calendar';
+        }
+
+        async function disconnectGoogle() {
+            // For now, just refresh status — full disconnect needs backend endpoint
+            addMessage('To disconnect Google, please contact support or clear your browser data.', 'cortex');
+        }
+
+        // ============================================================
+        // INIT
+        // ============================================================
         async function init() {
             loadTheme();
             sessionId = localStorage.getItem('cortex_session') || crypto.randomUUID();
@@ -785,6 +902,24 @@
             }
 
             await Promise.all([loadMemory(), loadTasks()]);
+            await checkGoogleStatus();
+
+            // Handle OAuth callback URL params
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('google_connected') === '1') {
+                addMessage('🎉 Google account connected! Cortex will now pull your Gmail and Calendar data for briefings.', 'cortex');
+                await pullGoogleData();
+                window.history.replaceState({}, '', window.location.pathname);
+            }
+            if (urlParams.get('error')) {
+                const error = urlParams.get('error');
+                let msg = 'Google connection failed.';
+                if (error === 'google_denied') msg = 'Google sign-in was cancelled.';
+                else if (error === 'oauth_state_mismatch') msg = 'Security check failed. Please try again.';
+                else if (error === 'no_code') msg = 'Authorization code not received.';
+                addMessage('⚠️ ' + msg, 'cortex');
+                window.history.replaceState({}, '', window.location.pathname);
+            }
         }
 
         // ============================================================
@@ -965,25 +1100,28 @@
         }
 
         async function resyncGmail() {
-            addMessage('Re-syncing Gmail...', 'cortex');
+            addMessage('Re-syncing Gmail and Calendar...', 'cortex');
             try {
-                const res = await fetch('/api/email/sync', { headers: await getAuthHeaders() });
+                const res = await fetch('/api/auth/google/pull', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...(await getAuthHeaders()) }
+                });
                 const data = await res.json();
-                addMessage('Gmail sync complete. ' + (data.count || 0) + ' emails loaded.', 'cortex');
+                if (data.status === 'ok') {
+                    addMessage(`Gmail & Calendar sync complete. ${data.emails_pulled} emails, ${data.events_pulled} events loaded.`, 'cortex');
+                    loadMemory();
+                    loadTasks();
+                } else {
+                    addMessage('Sync failed. Try connecting your Google account first using the "Connect Gmail & Calendar" button in Settings.', 'cortex');
+                }
             } catch (e) {
-                addMessage('Gmail sync failed. Make sure Google sign-in is connected.', 'cortex');
+                addMessage('Sync failed. Make sure Google account is connected.', 'cortex');
             }
         }
 
         async function resyncCalendar() {
-            addMessage('Re-syncing Calendar...', 'cortex');
-            try {
-                const res = await fetch('/api/calendar/today', { headers: await getAuthHeaders() });
-                const data = await res.json();
-                addMessage('Calendar sync complete. ' + (data.events ? data.events.length : 0) + ' events today.', 'cortex');
-            } catch (e) {
-                addMessage('Calendar sync failed.', 'cortex');
-            }
+            // Calendar sync is combined with Gmail sync
+            await resyncGmail();
         }
 
         // ============================================================

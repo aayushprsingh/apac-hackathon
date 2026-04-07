@@ -207,6 +207,36 @@ def get_or_create_demo_user():
     """Demo user with pre-seeded data — no Firebase needed."""
     global DEMO_TOKEN, _users_cache
     if DEMO_TOKEN is None:
+        # First check: is there already a demo session in SQLite from a previous run?
+        try:
+            conn = _get_user_db()
+            row = conn.execute(
+                "SELECT token FROM sessions WHERE user_id = 'demo-user' LIMIT 1"
+            ).fetchone()
+            conn.close()
+            if row:
+                DEMO_TOKEN = row[0]
+                # Restore session to memory
+                conn2 = _get_user_db()
+                sess_row = conn2.execute(
+                    "SELECT token, user_id, email, name, created_at, onboarding_complete, source FROM sessions WHERE token = ?",
+                    (DEMO_TOKEN,)
+                ).fetchone()
+                conn2.close()
+                if sess_row:
+                    _sessions[sess_row[0]] = {
+                        'user_id': sess_row[1],
+                        'email': sess_row[2],
+                        'name': sess_row[3],
+                        'created_at': sess_row[4],
+                        'onboarding_complete': bool(sess_row[5]),
+                        'source': sess_row[6],
+                    }
+                    return DEMO_TOKEN
+        except Exception as e:
+            print(f"[DemoUser] Error restoring session: {e}")
+
+        # No existing demo session — create fresh one
         DEMO_TOKEN = create_session_token()
         uid = 'demo-user'
         _sessions[DEMO_TOKEN] = {
@@ -218,6 +248,8 @@ def get_or_create_demo_user():
             'source': 'demo',
         }
         _users_cache[uid] = _get_demo_user_data(uid)
+        # Persist demo session to SQLite so it survives restarts
+        _save_session(DEMO_TOKEN, uid, 'demo@example.com', 'Demo User', time.time(), True, 'demo')
     return DEMO_TOKEN
 
 
@@ -316,6 +348,21 @@ def get_current_user():
 def require_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        # DEMO_MODE bypass: demo tokens are always valid within a session
+        if DEMO_MODE:
+            auth_header = request.headers.get('Authorization', '')
+            if auth_header.startswith('Bearer '):
+                token = auth_header[7:]
+                # Check if it's the current demo token OR a valid demo session in SQLite
+                if token == DEMO_TOKEN or token in _sessions:
+                    return f(*args, **kwargs)
+            # For DEMO_MODE, also check cookie
+            cookie_token = request.cookies.get('cortex_token')
+            if cookie_token and cookie_token in _sessions:
+                return f(*args, **kwargs)
+            # No valid session in demo mode — return user to login
+            return jsonify({'error': 'Session expired. Please reload the page.', 'reload': True}), 401
+        
         user = get_current_user()
         if not user:
             return jsonify({'error': 'Authentication required'}), 401
@@ -439,6 +486,153 @@ def create_session():
         return resp
 
     return jsonify({'error': 'Email and password are required'}), 400
+
+
+@app.route('/api/auth/google/status', methods=['GET'])
+@require_auth
+def google_oauth_status():
+    """Check if Google account is connected for the current user."""
+    user = get_current_user()
+    uid = user['user_id']
+    
+    oauth = __import__('app.google_oauth', fromlist=['google_oauth']).google_oauth
+    tokens = oauth.get_user_google_tokens(uid)
+    
+    connected = tokens is not None
+    user_info = {}
+    if connected:
+        user_info = oauth.get_user_info(tokens) or {}
+    
+    return jsonify({
+        'connected': connected,
+        'email': user_info.get('email', user.get('email', '')),
+        'name': user_info.get('name', user.get('name', '')),
+        'picture': user_info.get('picture', ''),
+        'configured': oauth.is_google_oauth_configured(),
+    })
+
+
+@app.route('/api/auth/google/connect', methods=['GET'])
+@require_auth
+def google_oauth_connect():
+    """Start Google OAuth flow — redirects user to Google consent screen."""
+    oauth = __import__('app.google_oauth', fromlist=['google_oauth']).google_oauth
+    if not oauth.is_google_oauth_configured():
+        return jsonify({'error': 'Google OAuth not configured on this server. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI environment variables.'}), 503
+    
+    import secrets
+    state = secrets.token_urlsafe(32)
+    
+    # Store state in session cookie for verification
+    from flask import make_response
+    result = oauth.get_authorization_url(state)
+    if result is None:
+        return jsonify({'error': 'Failed to generate OAuth URL'}), 500
+    
+    auth_url, state, flow = result
+    
+    resp = make_response(redirect(auth_url))
+    resp.set_cookie('oauth_state', state, httponly=True, samesite='Lax', max_age=600)
+    return resp
+
+
+@app.route('/api/auth/google/pull', methods=['POST'])
+@require_auth
+def google_oauth_pull():
+    """Pull Gmail + Calendar data using stored Google tokens. Auto-pulls on connect."""
+    user = get_current_user()
+    uid = user['user_id']
+    
+    oauth_mod = __import__('app.google_oauth', fromlist=['google_oauth']).google_oauth
+    tokens = oauth_mod.get_user_google_tokens(uid)
+    
+    if not tokens:
+        return jsonify({'error': 'Google account not connected'}), 400
+    
+    # Refresh token if needed
+    tokens = oauth_mod.refresh_google_token(tokens)
+    oauth_mod.save_user_google_tokens(uid, tokens)
+    
+    # Pull data
+    emails = oauth_mod.pull_gmail_data(tokens, max_results=20)
+    events = oauth_mod.pull_calendar_data(tokens, days_ahead=7)
+    user_info = oauth_mod.get_user_info(tokens)
+    
+    # Save to user data
+    udata = get_user_data(uid) or {}
+    udata['google_data'] = {
+        'emails': emails,
+        'calendar_events': events,
+        'connected_at': datetime.now().isoformat(),
+        'email': user_info.get('email', ''),
+    }
+    save_user_data(uid, udata)
+    
+    return jsonify({
+        'status': 'ok',
+        'emails_pulled': len(emails),
+        'events_pulled': len(events),
+        'email': user_info.get('email', ''),
+    })
+
+
+@app.route('/api/auth/google/callback', methods=['GET'])
+def google_oauth_callback():
+    """Handle Google OAuth callback — exchange code for tokens."""
+    oauth = __import__('app.google_oauth', fromlist=['google_oauth']).google_oauth
+    if not oauth.is_google_oauth_configured():
+        return redirect('/dashboard?error=google_oauth_not_configured')
+    
+    code = request.args.get('code')
+    state = request.args.get('state')
+    error = request.args.get('error')
+    stored_state = request.cookies.get('oauth_state')
+    
+    if error:
+        return redirect(f'/dashboard?error=google_denied')
+    
+    if not state or state != stored_state:
+        return redirect(f'/dashboard?error=oauth_state_mismatch')
+    
+    if not code:
+        return redirect('/dashboard?error=no_code')
+    
+    tokens, err = oauth.exchange_code_for_tokens(code, state=state, state_token=state)
+    if err or tokens is None:
+        return redirect(f'/dashboard?error=token_exchange_failed')
+    
+    # Get current user from session cookie
+    cookie_token = request.cookies.get('cortex_token')
+    if cookie_token and cookie_token in _sessions:
+        user = _sessions[cookie_token]
+        uid = user['user_id']
+    elif DEMO_MODE and request.cookies.get('cortex_token'):
+        uid = 'demo-user'
+    else:
+        return redirect('/login')
+    
+    # Save tokens
+    oauth.save_user_google_tokens(uid, tokens)
+    
+    # Update user profile with Google info
+    user_info = oauth.get_user_info(tokens)
+    if user_info:
+        udata = get_user_data(uid) or {}
+        profile = udata.get('profile', {})
+        profile['google_email'] = user_info.get('email', '')
+        if not profile.get('name') or profile.get('name') == 'Demo User':
+            profile['name'] = user_info.get('name', profile.get('name', ''))
+        udata['profile'] = profile
+        save_user_data(uid, udata)
+        
+        # Update session name if needed
+        if cookie_token and cookie_token in _sessions:
+            _sessions[cookie_token]['name'] = user_info.get('name', _sessions[cookie_token].get('name', ''))
+            _sessions[cookie_token]['email'] = user_info.get('email', _sessions[cookie_token].get('email', ''))
+    
+    resp = redirect('/dashboard?google_connected=1')
+    resp.delete_cookie('oauth_state')
+    return resp
 
 
 @app.route('/api/auth/demo', methods=['POST'])
@@ -918,6 +1112,41 @@ def api_tasks_update(task_id):
             return jsonify({'task': task})
 
     return jsonify({'error': f'Task {task_id} not found'}), 404
+
+
+@app.route('/api/tasks/<int:task_id>/complete', methods=['POST'])
+@require_auth
+def api_tasks_complete(task_id):
+    """Mark a task as complete."""
+    user = get_current_user()
+    uid = user['user_id']
+    udata = get_user_data(uid) or {}
+
+    for task in udata.get('tasks', []):
+        if task.get('id') == task_id:
+            task['status'] = 'done'
+            save_user_data(uid, udata)
+            return jsonify({'task': task, 'result': 'marked as done'})
+
+    return jsonify({'error': f'Task {task_id} not found'}), 404
+
+
+@app.route('/api/profile', methods=['PATCH'])
+@require_auth
+def api_profile_update():
+    """Update user profile settings (briefing_style, etc.)."""
+    user = get_current_user()
+    uid = user['user_id']
+    udata = get_user_data(uid) or {}
+    data = request.get_json() or {}
+
+    profile = udata.get('profile', {})
+    for key in ['briefing_style', 'working_hours', 'week_start']:
+        if key in data:
+            profile[key] = data[key]
+    udata['profile'] = profile
+    save_user_data(uid, udata)
+    return jsonify({'result': 'profile updated', 'profile': profile})
 
 
 @app.route('/api/calendar/today', methods=['GET'])

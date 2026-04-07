@@ -24,6 +24,7 @@ app.secret_key = os.getenv('SECRET_KEY', os.urandom(32))
 CORS(app)
 
 DEMO_MODE = os.getenv('DEMO_MODE', '').lower() not in ('false', '0', 'no', 'off')
+GOOGLE_ONLY_PASSWORD_HASH = '__google_oauth__'
 
 # =============================================================================
 # FIREBASE INITIALIZATION
@@ -77,6 +78,11 @@ def _get_user_db():
             created_at REAL
         )
     ''')
+    existing_columns = {row[1] for row in conn.execute("PRAGMA table_info(user_accounts)").fetchall()}
+    if 'auth_provider' not in existing_columns:
+        conn.execute("ALTER TABLE user_accounts ADD COLUMN auth_provider TEXT DEFAULT 'email'")
+    if 'google_sub' not in existing_columns:
+        conn.execute("ALTER TABLE user_accounts ADD COLUMN google_sub TEXT")
     conn.execute('''
         CREATE TABLE IF NOT EXISTS sessions (
             token TEXT PRIMARY KEY,
@@ -97,7 +103,10 @@ def _load_user_accounts():
     global _user_accounts
     try:
         conn = _get_user_db()
-        rows = conn.execute('SELECT email, password_hash, uid, name, created_at FROM user_accounts').fetchall()
+        rows = conn.execute(
+            'SELECT email, password_hash, uid, name, created_at, COALESCE(auth_provider, ?), google_sub FROM user_accounts',
+            ('email',)
+        ).fetchall()
         conn.close()
         for row in rows:
             _user_accounts[row[0]] = {
@@ -105,18 +114,20 @@ def _load_user_accounts():
                 'uid': row[2],
                 'name': row[3],
                 'created_at': row[4],
+                'auth_provider': row[5] or 'email',
+                'google_sub': row[6],
             }
     except Exception as e:
         print(f"[UserDB] Error loading accounts: {e}")
 
 
-def _save_user_account(email, password_hash, uid, name, created_at):
+def _save_user_account(email, password_hash, uid, name, created_at, auth_provider='email', google_sub=None):
     """Save a new user account to SQLite."""
     try:
         conn = _get_user_db()
         conn.execute(
-            'INSERT OR REPLACE INTO user_accounts (email, password_hash, uid, name, created_at) VALUES (?, ?, ?, ?, ?)',
-            (email, password_hash, uid, name, created_at)
+            'INSERT OR REPLACE INTO user_accounts (email, password_hash, uid, name, created_at, auth_provider, google_sub) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            (email, password_hash, uid, name, created_at, auth_provider, google_sub)
         )
         conn.commit()
         conn.close()
@@ -328,6 +339,116 @@ def save_user_data(uid, data):
     return True
 
 
+def ensure_user_cache(uid, email, name):
+    """Ensure a minimal local user profile exists for the session user."""
+    data = get_user_data(uid) or {
+        'profile': {},
+        'memory': {},
+        'tasks': [],
+        'cal_events': [],
+        'email_results': [],
+        'google_data': None,
+    }
+    profile = data.setdefault('profile', {})
+    profile.setdefault('briefing_style', 'balanced')
+    if email and not profile.get('email'):
+        profile['email'] = email
+    if name and not profile.get('name'):
+        profile['name'] = name
+    save_user_data(uid, data)
+    return data
+
+
+def ensure_google_user_account(user_info):
+    """Link a Google user to a local Cortex account, creating one if needed."""
+    global _user_accounts
+
+    email = (user_info.get('email') or '').strip().lower()
+    name = (user_info.get('name') or email.split('@')[0] or 'Google User').strip()
+    google_sub = user_info.get('id')
+
+    if not email:
+        raise ValueError('Google account did not provide an email address.')
+
+    if not _user_accounts:
+        _load_user_accounts()
+
+    existing = _user_accounts.get(email)
+    if existing:
+        existing['name'] = name or existing.get('name', email)
+        if google_sub:
+            existing['google_sub'] = google_sub
+        _save_user_account(
+            email,
+            existing['password_hash'],
+            existing['uid'],
+            existing['name'],
+            existing.get('created_at', time.time()),
+            existing.get('auth_provider', 'email'),
+            existing.get('google_sub'),
+        )
+        ensure_user_cache(existing['uid'], email, existing['name'])
+        return existing['uid'], existing['name']
+
+    uid = hashlib.sha256(email.encode()).hexdigest()[:16]
+    created_at = time.time()
+    _user_accounts[email] = {
+        'password_hash': GOOGLE_ONLY_PASSWORD_HASH,
+        'uid': uid,
+        'name': name,
+        'created_at': created_at,
+        'auth_provider': 'google',
+        'google_sub': google_sub,
+    }
+    _save_user_account(
+        email,
+        GOOGLE_ONLY_PASSWORD_HASH,
+        uid,
+        name,
+        created_at,
+        'google',
+        google_sub,
+    )
+    ensure_user_cache(uid, email, name)
+    return uid, name
+
+
+def get_google_oauth_module():
+    return __import__('app.google_oauth', fromlist=['*'])
+
+
+def sync_google_data_for_user(uid, tokens):
+    """Persist the latest Gmail + Calendar snapshot for a connected Google user."""
+    oauth_mod = get_google_oauth_module()
+    refreshed_tokens = oauth_mod.refresh_google_token(tokens)
+    oauth_mod.save_user_google_tokens(uid, refreshed_tokens)
+    user_info = oauth_mod.get_user_info(refreshed_tokens) or {}
+    emails = oauth_mod.pull_gmail_data(refreshed_tokens, max_results=20)
+    events = oauth_mod.pull_calendar_data(refreshed_tokens, days_ahead=7)
+
+    udata = ensure_user_cache(uid, user_info.get('email', ''), user_info.get('name', ''))
+    profile = udata.setdefault('profile', {})
+    if user_info.get('email'):
+        profile['google_email'] = user_info['email']
+        profile.setdefault('email', user_info['email'])
+    if user_info.get('name') and (not profile.get('name') or profile.get('name') == 'Demo User'):
+        profile['name'] = user_info['name']
+    udata['google_data'] = {
+        'emails': emails,
+        'calendar_events': events,
+        'connected_at': datetime.now().isoformat(),
+        'email': user_info.get('email', ''),
+    }
+    save_user_data(uid, udata)
+
+    return {
+        'tokens': refreshed_tokens,
+        'user_info': user_info,
+        'emails_pulled': len(emails),
+        'events_pulled': len(events),
+    }
+
+
 if DEMO_MODE:
     try:
         get_or_create_demo_user()
@@ -446,6 +567,8 @@ def create_session():
             return jsonify({'error': 'No account found with this email. Sign up first.'}), 401
 
         account = _user_accounts[email]
+        if account.get('auth_provider') == 'google' and account.get('password_hash') == GOOGLE_ONLY_PASSWORD_HASH:
+            return jsonify({'error': 'This account uses Google sign-in. Use Continue with Google.'}), 401
         if not verify_password(password, account['password_hash']):
             return jsonify({'error': 'Incorrect password. Try again.'}), 401
 
@@ -504,6 +627,37 @@ def create_session():
     return jsonify({'error': 'Email and password are required'}), 400
 
 
+def _start_google_oauth_flow(mode):
+    oauth = get_google_oauth_module()
+    if not oauth.is_google_oauth_configured():
+        if mode == 'login':
+            return redirect('/login?error=google_oauth_not_configured')
+        return jsonify({'error': 'Google OAuth not configured on this server. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI environment variables.'}), 503
+
+    import secrets
+    state = secrets.token_urlsafe(32)
+
+    from flask import make_response
+    result = oauth.get_authorization_url(state)
+    if result is None:
+        if mode == 'login':
+            return redirect('/login?error=google_oauth_start_failed')
+        return jsonify({'error': 'Failed to generate OAuth URL'}), 500
+
+    auth_url, state, flow = result
+
+    resp = make_response(redirect(auth_url))
+    resp.set_cookie('oauth_state', state, httponly=True, samesite='Lax', max_age=600)
+    resp.set_cookie('oauth_mode', mode, httponly=True, samesite='Lax', max_age=600)
+    return resp
+
+
+@app.route('/api/auth/google/login', methods=['GET'])
+def google_oauth_login():
+    """Start Google OAuth login from the public login page."""
+    return _start_google_oauth_flow('login')
+
+
 @app.route('/api/auth/google/status', methods=['GET'])
 @require_auth
 def google_oauth_status():
@@ -511,7 +665,7 @@ def google_oauth_status():
     user = get_current_user()
     uid = user['user_id']
     
-    oauth = __import__('app.google_oauth', fromlist=['google_oauth']).google_oauth
+    oauth = get_google_oauth_module()
     tokens = oauth.get_user_google_tokens(uid)
     
     connected = tokens is not None
@@ -532,24 +686,7 @@ def google_oauth_status():
 @require_auth
 def google_oauth_connect():
     """Start Google OAuth flow — redirects user to Google consent screen."""
-    oauth = __import__('app.google_oauth', fromlist=['google_oauth']).google_oauth
-    if not oauth.is_google_oauth_configured():
-        return jsonify({'error': 'Google OAuth not configured on this server. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI environment variables.'}), 503
-    
-    import secrets
-    state = secrets.token_urlsafe(32)
-    
-    # Store state in session cookie for verification
-    from flask import make_response
-    result = oauth.get_authorization_url(state)
-    if result is None:
-        return jsonify({'error': 'Failed to generate OAuth URL'}), 500
-    
-    auth_url, state, flow = result
-    
-    resp = make_response(redirect(auth_url))
-    resp.set_cookie('oauth_state', state, httponly=True, samesite='Lax', max_age=600)
-    return resp
+    return _start_google_oauth_flow('connect')
 
 
 @app.route('/api/auth/google/pull', methods=['POST'])
@@ -559,65 +696,90 @@ def google_oauth_pull():
     user = get_current_user()
     uid = user['user_id']
     
-    oauth_mod = __import__('app.google_oauth', fromlist=['google_oauth']).google_oauth
+    oauth_mod = get_google_oauth_module()
     tokens = oauth_mod.get_user_google_tokens(uid)
     
     if not tokens:
         return jsonify({'error': 'Google account not connected'}), 400
-    
-    # Refresh token if needed
-    tokens = oauth_mod.refresh_google_token(tokens)
-    oauth_mod.save_user_google_tokens(uid, tokens)
-    
-    # Pull data
-    emails = oauth_mod.pull_gmail_data(tokens, max_results=20)
-    events = oauth_mod.pull_calendar_data(tokens, days_ahead=7)
-    user_info = oauth_mod.get_user_info(tokens)
-    
-    # Save to user data
-    udata = get_user_data(uid) or {}
-    udata['google_data'] = {
-        'emails': emails,
-        'calendar_events': events,
-        'connected_at': datetime.now().isoformat(),
-        'email': user_info.get('email', ''),
-    }
-    save_user_data(uid, udata)
-    
+
+    sync_result = sync_google_data_for_user(uid, tokens)
+
     return jsonify({
         'status': 'ok',
-        'emails_pulled': len(emails),
-        'events_pulled': len(events),
-        'email': user_info.get('email', ''),
+        'emails_pulled': sync_result['emails_pulled'],
+        'events_pulled': sync_result['events_pulled'],
+        'email': sync_result['user_info'].get('email', ''),
     })
 
 
 @app.route('/api/auth/google/callback', methods=['GET'])
 def google_oauth_callback():
     """Handle Google OAuth callback — exchange code for tokens."""
-    oauth = __import__('app.google_oauth', fromlist=['google_oauth']).google_oauth
+    oauth = get_google_oauth_module()
+    oauth_mode = request.cookies.get('oauth_mode', 'connect')
+    error_target = '/login' if oauth_mode == 'login' else '/dashboard'
+
+    def oauth_error(code):
+        resp = redirect(f'{error_target}?error={code}')
+        resp.delete_cookie('oauth_state')
+        resp.delete_cookie('oauth_mode')
+        return resp
+
     if not oauth.is_google_oauth_configured():
-        return redirect('/dashboard?error=google_oauth_not_configured')
-    
+        return oauth_error('google_oauth_not_configured')
+
     code = request.args.get('code')
     state = request.args.get('state')
     error = request.args.get('error')
     stored_state = request.cookies.get('oauth_state')
     
     if error:
-        return redirect(f'/dashboard?error=google_denied')
+        return oauth_error('google_denied')
     
     if not state or state != stored_state:
-        return redirect(f'/dashboard?error=oauth_state_mismatch')
+        return oauth_error('oauth_state_mismatch')
     
     if not code:
-        return redirect('/dashboard?error=no_code')
+        return oauth_error('no_code')
     
     tokens, err = oauth.exchange_code_for_tokens(code, state=state, state_token=state)
     if err or tokens is None:
-        return redirect(f'/dashboard?error=token_exchange_failed')
-    
-    # Get current user from session cookie
+
+        return oauth_error('token_exchange_failed')
+
+    user_info = oauth.get_user_info(tokens) or {}
+
+    if oauth_mode == 'login':
+        try:
+            uid, name = ensure_google_user_account(user_info)
+        except ValueError:
+            return oauth_error('google_email_missing')
+
+        oauth.save_user_google_tokens(uid, tokens)
+        try:
+            sync_google_data_for_user(uid, tokens)
+        except Exception as e:
+            print(f"[GoogleLogin] Auto-pull failed: {e}")
+
+        email = (user_info.get('email') or '').strip().lower()
+        token = create_session_token()
+        _sessions[token] = {
+            'user_id': uid,
+            'email': email,
+            'name': name,
+            'created_at': time.time(),
+            'onboarding_complete': True,
+            'source': 'google',
+        }
+        _save_session(token, uid, email, name, time.time(), True, 'google')
+
+        resp = redirect(f'/dashboard?token={token}')
+        resp.set_cookie('cortex_token', token, httponly=True, samesite='Lax', max_age=86400 * 30)
+        resp.delete_cookie('oauth_state')
+        resp.delete_cookie('oauth_mode')
+        return resp
+
+    # Get current user from session cookie for post-login Google connect
     cookie_token = request.cookies.get('cortex_token')
     if cookie_token and cookie_token in _sessions:
         user = _sessions[cookie_token]
@@ -625,29 +787,25 @@ def google_oauth_callback():
     elif DEMO_MODE and request.cookies.get('cortex_token'):
         uid = 'demo-user'
     else:
-        return redirect('/login')
-    
-    # Save tokens
+        return oauth_error('missing_session')
+
     oauth.save_user_google_tokens(uid, tokens)
-    
-    # Update user profile with Google info
-    user_info = oauth.get_user_info(tokens)
     if user_info:
-        udata = get_user_data(uid) or {}
+        udata = ensure_user_cache(uid, user_info.get('email', ''), user_info.get('name', ''))
         profile = udata.get('profile', {})
         profile['google_email'] = user_info.get('email', '')
-        if not profile.get('name') or profile.get('name') == 'Demo User':
+        if user_info.get('name') and (not profile.get('name') or profile.get('name') == 'Demo User'):
             profile['name'] = user_info.get('name', profile.get('name', ''))
         udata['profile'] = profile
         save_user_data(uid, udata)
-        
-        # Update session name if needed
+
         if cookie_token and cookie_token in _sessions:
             _sessions[cookie_token]['name'] = user_info.get('name', _sessions[cookie_token].get('name', ''))
             _sessions[cookie_token]['email'] = user_info.get('email', _sessions[cookie_token].get('email', ''))
-    
+
     resp = redirect('/dashboard?google_connected=1')
     resp.delete_cookie('oauth_state')
+    resp.delete_cookie('oauth_mode')
     return resp
 
 

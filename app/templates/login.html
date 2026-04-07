@@ -131,6 +131,33 @@
         }
         .demo-btn:hover { background: var(--accent-light); color: var(--accent); border-color: var(--accent); }
 
+        .google-btn {
+            width: 100%;
+            padding: 11px 14px;
+            border-radius: 10px;
+            border: 1.5px solid var(--border);
+            background: var(--surface);
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            font-family: inherit;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .google-btn:hover { border-color: #c7d2fe; background: #f8fafc; }
+        .google-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .google-mark {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: conic-gradient(#4285F4 0 25%, #34A853 25% 50%, #FBBC05 50% 75%, #EA4335 75% 100%);
+            flex-shrink: 0;
+        }
+
         .error-box {
             background: #fef2f2;
             border: 1px solid #fca5a5;
@@ -280,6 +307,11 @@
             <div class="toggle-link" onclick="showTab('login')">Already have an account? Sign in →</div>
         </div>
 
+        <button class="google-btn" id="googleLoginBtn" onclick="handleGoogleLogin()">
+            <span class="google-mark" aria-hidden="true"></span>
+            <span>Continue with Google</span>
+        </button>
+
         <div class="divider">or</div>
 
         <button class="demo-btn" id="demoBtn" onclick="handleDemo()">
@@ -304,6 +336,26 @@
             } catch (e) {}
         }
         checkSession();
+
+        function showPageErrorFromQuery() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const error = urlParams.get('error');
+            if (!error) return;
+
+            let message = 'Google sign-in failed. Please try again.';
+            if (error === 'google_denied') message = 'Google sign-in was cancelled.';
+            else if (error === 'oauth_state_mismatch') message = 'Security check failed. Please try again.';
+            else if (error === 'no_code') message = 'Google did not return an authorization code.';
+            else if (error === 'token_exchange_failed') message = 'Google token exchange failed. Check the OAuth client configuration.';
+            else if (error === 'google_oauth_not_configured') message = 'Google sign-in is not configured on this deployment yet.';
+            else if (error === 'google_oauth_start_failed') message = 'Could not start Google sign-in. Please try again.';
+            else if (error === 'google_email_missing') message = 'Your Google account did not return an email address.';
+            else if (error === 'missing_session') message = 'Your session expired before Google account connection completed.';
+
+            showError(message);
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+        showPageErrorFromQuery();
 
         function showTab(tab) {
             document.getElementById('sectionLogin').classList.toggle('active', tab === 'login');
@@ -412,6 +464,12 @@
                 btn.textContent = '🚀 Try without an account — guest access';
                 showError(e.message || 'Failed to start. Please try again.');
             }
+        }
+
+        function handleGoogleLogin() {
+            const btn = document.getElementById('googleLoginBtn');
+            btn.disabled = true;
+            window.location.href = '/api/auth/google/login';
         }
     </script>
 </body>

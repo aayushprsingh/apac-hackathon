@@ -48,6 +48,8 @@ except Exception as e:
     print(f"[App] Firebase init error: {e} — demo + email/password mode")
     fb = None
 
+DEMO_TOKEN = None
+
 # =============================================================================
 # PERSISTENT STORAGE — SQLite for user accounts + sessions ( survives restarts)
 # =============================================================================
@@ -326,6 +328,14 @@ def save_user_data(uid, data):
     return True
 
 
+if DEMO_MODE:
+    try:
+        get_or_create_demo_user()
+        print("[DemoUser] Demo session initialized at startup")
+    except Exception as e:
+        print(f"[DemoUser] Startup initialization failed: {e}")
+
+
 def get_current_user():
     """Get current user from request auth."""
     auth_header = request.headers.get('Authorization', '')
@@ -416,11 +426,17 @@ def create_session():
     1. Email + password login (always works)
     2. Demo mode (no auth needed)
     """
-    global _users_cache
+    global _user_accounts, _users_cache
 
     data = request.get_json() or {}
     email = (data.get('email') or '').strip().lower()
     password = data.get('password') or ''
+
+    if not _user_accounts:
+        print("[LOGIN] _user_accounts empty, reloading from SQLite")
+        _load_user_accounts()
+
+    print(f"[LOGIN] email={email or '<missing>'}, accounts_loaded={len(_user_accounts)}, exists={email in _user_accounts}")
 
     # -------------------------------------------------------------------------
     # PATH 1: Email + Password Login (always works)
@@ -640,6 +656,8 @@ def create_demo_session():
     """Create demo session — always available."""
     token = get_or_create_demo_user()
     user = _sessions[token]
+    user['onboarding_complete'] = False
+    _save_session(token, user['user_id'], user['email'], user['name'], user['created_at'], False, user.get('source', 'demo'))
     resp = jsonify({
         'token': token,
         'user': {'email': user['email'], 'name': user['name']},
@@ -653,11 +671,15 @@ def create_demo_session():
 @app.route('/api/auth/register', methods=['POST'])
 def register_user():
     """Register a new user with email and password. Creates account and auto-logs in."""
+    global _user_accounts, _users_cache
     print(f"[REGISTER] Called — DEMO_MODE={DEMO_MODE}, firebase={firebase_initialized}")
     print(f"[REGISTER] _user_accounts type: {type(_user_accounts)}, len: {len(_user_accounts)}")
     print(f"[REGISTER] _sessions type: {type(_sessions)}, len: {len(_sessions)}")
     try:
-        global _users_cache
+        if not _user_accounts:
+            print("[REGISTER] _user_accounts empty, reloading from SQLite")
+            _load_user_accounts()
+        print(f"[REGISTER] accounts loaded: {len(_user_accounts)}")
 
         data = request.get_json() or {}
         email = (data.get('email') or '').strip().lower()
@@ -828,6 +850,22 @@ def finish_onboarding():
     user['onboarding_complete'] = True
 
     save_user_data(uid, user_data)
+
+    auth_header = request.headers.get('Authorization', '')
+    session_token = auth_header[7:] if auth_header.startswith('Bearer ') else request.cookies.get('cortex_token')
+    if session_token in _sessions:
+        _sessions[session_token]['name'] = name
+        _sessions[session_token]['email'] = user_email
+        _sessions[session_token]['onboarding_complete'] = True
+        _save_session(
+            session_token,
+            uid,
+            user_email,
+            name,
+            _sessions[session_token].get('created_at', time.time()),
+            True,
+            _sessions[session_token].get('source', 'email'),
+        )
 
     return jsonify({'status': 'ok', 'name': name})
 

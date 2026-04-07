@@ -325,6 +325,15 @@
             document.getElementById(spinnerId).style.display = loading ? 'inline-block' : 'none';
         }
 
+        async function readJsonSafely(res) {
+            try {
+                return await res.json();
+            } catch (e) {
+                console.error('Failed to parse JSON response', e);
+                return {};
+            }
+        }
+
         async function handleLogin() {
             const email = document.getElementById('loginEmail').value.trim();
             const password = document.getElementById('loginPassword').value;
@@ -336,11 +345,13 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
                 });
-                const data = await res.json();
+                const data = await readJsonSafely(res);
+                console.debug('Login response', { ok: res.ok, status: res.status, email });
                 if (!res.ok) { showError(data.error || 'Sign in failed. Please try again.'); setLoading('loginBtn', 'loginBtnText', 'loginSpinner', false); return; }
                 localStorage.setItem('cortex_token', data.token);
-                window.location.href = '/dashboard';
+                window.location.href = data.needs_onboarding ? '/onboarding' : '/dashboard';
             } catch (e) {
+                console.error('Login request failed', e);
                 showError('Connection error. Please check your internet and try again.');
                 setLoading('loginBtn', 'loginBtnText', 'loginSpinner', false);
             }
@@ -366,11 +377,13 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, email, password })
                 });
-                const data = await res.json();
+                const data = await readJsonSafely(res);
+                console.debug('Signup response', { ok: res.ok, status: res.status, email });
                 if (!res.ok) { showError(data.error || 'Sign up failed. Please try again.'); setLoading('signupBtn', 'signupBtnText', 'signupSpinner', false); return; }
                 localStorage.setItem('cortex_token', data.token);
-                window.location.href = '/dashboard';
+                window.location.href = data.needs_onboarding ? '/onboarding' : '/dashboard';
             } catch (e) {
+                console.error('Signup request failed', e);
                 showError('Connection error. Please check your internet and try again.');
                 setLoading('signupBtn', 'signupBtnText', 'signupSpinner', false);
             }
@@ -386,13 +399,18 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({})
                 });
-                const data = await res.json();
+                const data = await readJsonSafely(res);
+                console.debug('Demo response', { ok: res.ok, status: res.status });
+                if (!res.ok) {
+                    throw new Error(data.error || 'Failed to start guest access.');
+                }
                 localStorage.setItem('cortex_token', data.token);
-                window.location.href = '/dashboard';
+                window.location.href = data.needs_onboarding ? '/onboarding' : '/dashboard';
             } catch (e) {
+                console.error('Demo request failed', e);
                 btn.disabled = false;
                 btn.textContent = '🚀 Try without an account — guest access';
-                showError('Failed to start. Please try again.');
+                showError(e.message || 'Failed to start. Please try again.');
             }
         }
     </script>

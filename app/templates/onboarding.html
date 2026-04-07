@@ -159,7 +159,19 @@
             </select>
 
             <label>Typical working hours</label>
-            <input type="text" id="workingHours" placeholder="e.g. 9am-6pm IST">
+            <select id="workingHours" onchange="toggleWorkingHoursCustom()">
+                <option value="">Select your typical working hours</option>
+                <option value="5am-12pm IST">5am-12pm IST</option>
+                <option value="6am-12pm IST">6am-12pm IST</option>
+                <option value="7am-4pm IST">7am-4pm IST</option>
+                <option value="8am-5pm IST">8am-5pm IST</option>
+                <option value="9am-6pm IST">9am-6pm IST (most common)</option>
+                <option value="10am-7pm IST">10am-7pm IST</option>
+                <option value="11am-8pm IST">11am-8pm IST</option>
+                <option value="12pm-9pm IST">12pm-9pm IST</option>
+                <option value="custom">Custom</option>
+            </select>
+            <input type="text" id="workingHoursCustom" placeholder="Enter your custom working hours" style="display:none; margin-top:10px;">
 
             <div class="btn-row">
                 <button class="btn-primary" onclick="goToStep(2)">Continue →</button>
@@ -308,6 +320,24 @@
             setTimeout(() => el.style.display = 'none', 4000);
         }
 
+        function toggleWorkingHoursCustom() {
+            const select = document.getElementById('workingHours');
+            const customInput = document.getElementById('workingHoursCustom');
+            const isCustom = select.value === 'custom';
+            customInput.style.display = isCustom ? 'block' : 'none';
+            if (!isCustom) {
+                customInput.value = '';
+            }
+        }
+
+        function getWorkingHoursValue() {
+            const selectValue = document.getElementById('workingHours').value;
+            if (selectValue === 'custom') {
+                return document.getElementById('workingHoursCustom').value.trim();
+            }
+            return selectValue.trim();
+        }
+
         function addPerson(name = '', context = '', relationship = '') {
             const list = document.getElementById('peopleList');
             const id = peopleCount++;
@@ -353,7 +383,7 @@
                 email: userEmail || document.getElementById('userEmail').value.trim(),
                 preferred_name: document.getElementById('preferredName').value.trim() || undefined,
                 briefing_style: document.getElementById('briefingStyle').value,
-                working_hours: document.getElementById('workingHours').value.trim() || undefined,
+                working_hours: getWorkingHoursValue() || undefined,
                 people: getPeople(),
                 current_project: {
                     name: document.getElementById('currentProject').value.trim(),
@@ -388,6 +418,7 @@
             }
         }
 
+        toggleWorkingHoursCustom();
         init();
     </script>
 </body>
